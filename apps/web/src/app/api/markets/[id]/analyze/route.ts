@@ -170,8 +170,7 @@ Search the web for recent news about "${market.question}" and provide your analy
           { role: "user", content: userPrompt }
         ],
         temperature: 0.3,
-        max_tokens: depthConfig.maxTokens,
-        search: true // Enable web search
+        max_tokens: depthConfig.maxTokens
       })
     });
 
