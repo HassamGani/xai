@@ -47,16 +47,19 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
     chartRef.current = chart;
 
     series.forEach((s) => {
-      const line = chart.addSeries({
-        type: "Line",
-        options: {
-          color: s.color,
-          lineWidth: 2,
-          priceFormat: { type: "price", minMove: 0.001 },
-          lastValueVisible: true,
-          title: s.label
-        }
-      }) as ISeriesApi<"Line">;
+      const opts = {
+        color: s.color,
+        lineWidth: 2,
+        priceFormat: { type: "price", minMove: 0.001 },
+        lastValueVisible: true,
+        title: s.label
+      };
+      // lightweight-charts v5 uses addSeries; some builds may still expose addLineSeries. Use whichever exists.
+      const line: ISeriesApi<"Line"> =
+        (chart as any).addLineSeries?.(opts) ??
+        (chart as any).addSeries?.({ type: "Line" }) ??
+        chart.addSeries?.({ type: "Line" });
+      line.applyOptions(opts);
       line.setData(s.data);
       seriesRefs.current.set(s.id, line);
     });
