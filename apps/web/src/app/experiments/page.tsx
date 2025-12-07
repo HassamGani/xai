@@ -1,10 +1,11 @@
 import { getSupabaseAdmin } from "@/lib/supabase/server";
+import { getSupabaseServer } from "@/lib/supabase/server";
 import { ExperimentsPanel, type Experiment } from "@/components/experiments/experiments-panel";
 
 export const dynamic = "force-dynamic";
 
 export default async function ExperimentsPage() {
-  const supabase = getSupabaseAdmin();
+  const supabase = getSupabaseAdmin() || getSupabaseServer();
   const experiments: Experiment[] =
     supabase
       ? (
