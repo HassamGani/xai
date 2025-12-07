@@ -34,7 +34,6 @@ const TIME_RANGES: { value: TimeRange; label: string; seconds: number | null }[]
 
 const TOOLTIP_HEIGHT = 26;
 
-// Theme-aware colors
 const CHART_COLORS = {
   light: {
     background: "transparent",
@@ -54,7 +53,6 @@ const CHART_COLORS = {
 
 function applyCollisionDetection(tips: TooltipItem[], containerHeight: number) {
   if (tips.length === 0) return;
-  
   tips.sort((a, b) => a.y - b.y);
 
   for (let i = 1; i < tips.length; i++) {
@@ -111,11 +109,15 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
     return { ...s, data: s.data.filter((d) => d.time >= cutoff) };
   });
 
+  // Store series data in ref for use in callbacks
+  const filteredSeriesRef = useRef(filteredSeries);
+  filteredSeriesRef.current = filteredSeries;
+
   const computeStaticTooltips = useCallback(() => {
-    if (!chartRef.current) return;
+    if (!chartRef.current || !containerRef.current) return;
     
     const tips: TooltipItem[] = [];
-    filteredSeries.forEach((s) => {
+    filteredSeriesRef.current.forEach((s) => {
       if (s.data.length === 0) return;
       const lastPoint = s.data[s.data.length - 1];
       const seriesRef = seriesMapRef.current.get(s.id);
@@ -126,43 +128,46 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
         }
       }
     });
-    applyCollisionDetection(tips, containerRef.current?.clientHeight ?? height);
+    applyCollisionDetection(tips, containerRef.current.clientHeight);
     setTooltips(tips);
-  }, [filteredSeries, height]);
+    setCursorX(null);
+  }, []);
 
-  const handleCrosshairMove = useCallback(
-    (param: unknown) => {
-      const p = param as {
-        time?: number;
-        point?: { x: number; y: number };
-        seriesData?: Map<unknown, { value?: number }>;
-      };
+  const handleCrosshairMove = useCallback((param: unknown) => {
+    const p = param as {
+      time?: number;
+      point?: { x: number; y: number };
+      seriesData?: Map<unknown, { value?: number }>;
+    };
 
-      if (!p.time || !p.point || !p.seriesData || !chartRef.current) {
-        setCursorX(null);
-        computeStaticTooltips();
-        return;
-      }
+    if (!p.time || !p.point || !p.seriesData || !chartRef.current || !containerRef.current) {
+      computeStaticTooltips();
+      return;
+    }
 
-      setCursorX(p.point.x);
-
-      const tips: TooltipItem[] = [];
-      filteredSeries.forEach((s) => {
-        const seriesRef = seriesMapRef.current.get(s.id);
-        if (!seriesRef) return;
-        const data = p.seriesData!.get(seriesRef);
-        if (data && typeof data.value === "number") {
-          const y = (seriesRef as any).priceToCoordinate(data.value);
-          if (y !== null && !isNaN(y)) {
-            tips.push({ id: s.id, y, label: s.label, color: s.color, value: data.value });
-          }
+    const tips: TooltipItem[] = [];
+    filteredSeriesRef.current.forEach((s) => {
+      const seriesRef = seriesMapRef.current.get(s.id);
+      if (!seriesRef) return;
+      const dataAtCursor = p.seriesData!.get(seriesRef);
+      if (dataAtCursor && typeof dataAtCursor.value === "number") {
+        const y = (seriesRef as any).priceToCoordinate(dataAtCursor.value);
+        if (y !== null && !isNaN(y)) {
+          tips.push({ 
+            id: s.id, 
+            y, 
+            label: s.label, 
+            color: s.color, 
+            value: dataAtCursor.value 
+          });
         }
-      });
-      applyCollisionDetection(tips, containerRef.current?.clientHeight ?? height);
-      setTooltips(tips);
-    },
-    [filteredSeries, height, computeStaticTooltips]
-  );
+      }
+    });
+    
+    applyCollisionDetection(tips, containerRef.current.clientHeight);
+    setTooltips(tips);
+    setCursorX(p.point.x);
+  }, [computeStaticTooltips]);
 
   useEffect(() => {
     if (!mounted || !containerRef.current) return;
@@ -198,6 +203,11 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
 
         if (!containerRef.current) return;
 
+        // Clean up existing chart
+        if (chartRef.current && typeof (chartRef.current as any).remove === "function") {
+          try { (chartRef.current as any).remove(); } catch {}
+        }
+
         const chart = createChart(containerRef.current, {
           width: containerRef.current.clientWidth,
           height,
@@ -209,12 +219,8 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
             vertLines: { color: colors.gridLines },
             horzLines: { color: colors.gridLines }
           },
-          rightPriceScale: {
-            visible: false
-          },
-          leftPriceScale: {
-            visible: false
-          },
+          rightPriceScale: { visible: false },
+          leftPriceScale: { visible: false },
           timeScale: {
             borderColor: colors.gridLines,
             timeVisible: true,
@@ -228,10 +234,7 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
               style: 2,
               labelBackgroundColor: colors.crosshairLabel
             },
-            horzLine: {
-              visible: false,
-              labelVisible: false
-            }
+            horzLine: { visible: false, labelVisible: false }
           },
           handleScale: false,
           handleScroll: false
@@ -280,12 +283,13 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
           ((chartAny.timeScale as Function)() as any).fitContent();
         }
 
-        setTimeout(() => computeStaticTooltips(), 50);
+        // Initial static tooltips
+        setTimeout(computeStaticTooltips, 100);
 
         const handleResize = () => {
           if (!containerRef.current || !chartRef.current) return;
           (chartRef.current as any).applyOptions({ width: containerRef.current.clientWidth });
-          if (cursorX === null) computeStaticTooltips();
+          computeStaticTooltips();
         };
 
         window.addEventListener("resize", handleResize);
@@ -306,7 +310,7 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
 
     initChart();
     return () => { if (cleanupFn) cleanupFn(); };
-  }, [mounted, height, filteredSeries, timeRange, handleCrosshairMove, computeStaticTooltips, cursorX, colors, isDark]);
+  }, [mounted, height, filteredSeries, timeRange, colors, isDark, handleCrosshairMove, computeStaticTooltips]);
 
   if (!mounted) {
     return <div className="w-full rounded-lg animate-pulse bg-muted" style={{ height }} />;
@@ -364,10 +368,7 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
             }}
           >
             <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-popover border border-border shadow-md text-xs">
-              <span
-                className="w-2 h-2 rounded-full"
-                style={{ backgroundColor: tip.color }}
-              />
+              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: tip.color }} />
               <span className="text-muted-foreground">{tip.label}</span>
               <span className="font-semibold tabular-nums" style={{ color: tip.color }}>
                 {(tip.value * 100).toFixed(1)}%
