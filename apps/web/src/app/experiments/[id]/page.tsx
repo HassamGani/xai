@@ -26,18 +26,26 @@ export default async function ExperimentPage({ params }: { params: { id: string 
 
   if (error || !exp) return notFound();
 
+  // Always auto-run experiment once on view if no snapshots exist
+  const { data: snapshots } = await supabase
+    .from("experiment_snapshots")
+    .select("*")
+    .eq("experiment_id", params.id)
+    .order("timestamp", { ascending: true });
+
+  if (!snapshots || snapshots.length === 0) {
+    // Fire-and-forget run (no await)
+    fetch(`${process.env.NEXT_PUBLIC_BASE_URL || ""}/api/experiments/${params.id}/run`, {
+      method: "POST"
+    }).catch(() => {});
+  }
+
   const { data: runs } = await supabase
     .from("experiment_runs")
     .select("*")
     .eq("experiment_id", params.id)
     .order("started_at", { ascending: false })
     .limit(1);
-
-  const { data: snapshots } = await supabase
-    .from("experiment_snapshots")
-    .select("*")
-    .eq("experiment_id", params.id)
-    .order("timestamp", { ascending: true });
 
   const lastRun = runs?.[0] || null;
   const snapshotCount = snapshots?.length || 0;
