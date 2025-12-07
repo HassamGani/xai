@@ -19,25 +19,11 @@ const supabase: SupabaseClient = createClient(
 );
 
 // Types
-interface Market {
-  id: string;
-  question: string;
-  normalized_question: string | null;
-  x_rule_templates: string[] | null;
-  status: string;
-}
-
 interface Outcome {
   id: string;
   outcome_id: string;
   label: string;
   current_probability: number;
-}
-
-interface StreamRule {
-  id?: string;
-  value: string;
-  tag: string;
 }
 
 // X API endpoints
@@ -61,32 +47,23 @@ const GrokResponseSchema = z.object({
     credibility_label: z.enum(["High", "Medium", "Low"]),
     stance_label: z.string(),
   }),
-  flags: z.object({
-    is_sarcasm: z.boolean(),
-    is_question: z.boolean(),
-    is_rumor: z.boolean(),
-  }).optional(),
+  flags: z
+    .object({
+      is_sarcasm: z.boolean(),
+      is_question: z.boolean(),
+      is_rumor: z.boolean(),
+    })
+    .optional(),
 });
 
 // Logger
-function log(level: "INFO" | "ERROR" | "WARN" | "DEBUG", message: string, data?: any) {
+function log(
+  level: "INFO" | "ERROR" | "WARN" | "DEBUG",
+  message: string,
+  data?: Record<string, unknown>
+) {
   const timestamp = new Date().toISOString();
   console.log(JSON.stringify({ timestamp, level, message, ...data }));
-}
-
-// Fetch active markets
-async function getActiveMarkets(): Promise<Market[]> {
-  const { data, error } = await supabase
-    .from("markets")
-    .select("id, question, normalized_question, x_rule_templates, status")
-    .eq("status", "active");
-
-  if (error) {
-    log("ERROR", "Failed to fetch markets", { error });
-    return [];
-  }
-
-  return data || [];
 }
 
 // Fetch outcomes for a market
@@ -104,8 +81,8 @@ async function getOutcomes(marketId: string): Promise<Outcome[]> {
   return data || [];
 }
 
-// X API: Get current rules
-async function getCurrentRules(): Promise<StreamRule[]> {
+// Check current rules (just for display, not syncing)
+async function displayCurrentRules(): Promise<void> {
   const response = await fetch(`${X_API_BASE}/tweets/search/stream/rules`, {
     headers: {
       Authorization: `Bearer ${env.X_BEARER_TOKEN}`,
@@ -113,107 +90,34 @@ async function getCurrentRules(): Promise<StreamRule[]> {
   });
 
   if (!response.ok) {
-    const text = await response.text();
-    log("ERROR", "Failed to get stream rules", { status: response.status, body: text });
-    return [];
-  }
-
-  const data = await response.json();
-  return data.data || [];
-}
-
-// X API: Add rules
-async function addRules(rules: { value: string; tag: string }[]): Promise<void> {
-  if (rules.length === 0) return;
-
-  const response = await fetch(`${X_API_BASE}/tweets/search/stream/rules`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${env.X_BEARER_TOKEN}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ add: rules }),
-  });
-
-  if (!response.ok) {
-    const text = await response.text();
-    log("ERROR", "Failed to add stream rules", { status: response.status, body: text });
+    log("ERROR", "Failed to get stream rules", { status: response.status });
     return;
   }
 
   const data = await response.json();
-  log("INFO", "Added stream rules", { meta: data.meta });
-}
+  const rules = data.data || [];
 
-// X API: Delete rules
-async function deleteRules(ids: string[]): Promise<void> {
-  if (ids.length === 0) return;
-
-  const response = await fetch(`${X_API_BASE}/tweets/search/stream/rules`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${env.X_BEARER_TOKEN}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ delete: { ids } }),
-  });
-
-  if (!response.ok) {
-    const text = await response.text();
-    log("ERROR", "Failed to delete stream rules", { status: response.status, body: text });
-  }
-}
-
-// Sync rules with active markets
-async function syncRules(markets: Market[]): Promise<void> {
-  const currentRules = await getCurrentRules();
-  const currentTags = new Set(currentRules.map((r) => r.tag));
-
-  // Build desired rules
-  const desiredRules: { value: string; tag: string }[] = [];
-  for (const market of markets) {
-    if (!market.x_rule_templates || market.x_rule_templates.length === 0) continue;
-
-    for (let i = 0; i < market.x_rule_templates.length; i++) {
-      const tag = `market:${market.id}:${i}`;
-      if (!currentTags.has(tag)) {
-        desiredRules.push({
-          value: market.x_rule_templates[i],
-          tag,
-        });
-      }
-    }
-  }
-
-  // Delete rules for inactive markets
-  const activeMarketIds = new Set(markets.map((m) => m.id));
-  const rulesToDelete = currentRules
-    .filter((r) => {
-      const match = r.tag.match(/^market:([^:]+):/);
-      return match && !activeMarketIds.has(match[1]);
-    })
-    .map((r) => r.id!)
-    .filter(Boolean);
-
-  if (rulesToDelete.length > 0) {
-    await deleteRules(rulesToDelete);
-    log("INFO", "Deleted inactive rules", { count: rulesToDelete.length });
-  }
-
-  // Add new rules
-  if (desiredRules.length > 0) {
-    await addRules(desiredRules);
-    log("INFO", "Added new rules", { count: desiredRules.length });
+  if (rules.length === 0) {
+    log("INFO", "No active stream rules. Create a market via the UI to activate ingestion.");
+  } else {
+    log("INFO", `Active stream rules: ${rules.length}`, {
+      rules: rules.map((r: { tag: string; value: string }) => ({
+        tag: r.tag,
+        value: r.value.slice(0, 50) + (r.value.length > 50 ? "..." : ""),
+      })),
+    });
   }
 }
 
 // Score a tweet with Grok
 async function scoreTweet(
   tweet: { text: string; author_id: string },
-  market: Market,
+  market: { question: string; normalized_question: string | null },
   outcomes: Outcome[]
 ): Promise<z.infer<typeof GrokResponseSchema> | null> {
-  const outcomesStr = outcomes.map((o) => `- ${o.outcome_id}: "${o.label}"`).join("\n");
+  const outcomesStr = outcomes
+    .map((o) => `- ${o.outcome_id}: "${o.label}"`)
+    .join("\n");
 
   const systemPrompt = `You are an evidence-scoring engine for a prediction market.
 
@@ -287,7 +191,7 @@ Score this tweet.`;
     const parsed = JSON.parse(jsonStr.trim());
     return GrokResponseSchema.parse(parsed);
   } catch (error) {
-    log("ERROR", "Failed to score tweet", { error });
+    log("ERROR", "Failed to score tweet", { error: String(error) });
     return null;
   }
 }
@@ -315,6 +219,13 @@ async function processTweet(
     if (match) marketIds.add(match[1]);
   }
 
+  if (marketIds.size === 0) {
+    log("DEBUG", "No market IDs found in matching rules", {
+      rules: matchingRules.map((r) => r.tag),
+    });
+    return;
+  }
+
   for (const marketId of marketIds) {
     // Check if tweet already exists
     const { data: existing } = await supabase
@@ -340,10 +251,16 @@ async function processTweet(
       .eq("id", marketId)
       .single();
 
-    if (!market || market.status !== "active") continue;
+    if (!market || market.status !== "active") {
+      log("DEBUG", "Market not found or not active", { marketId });
+      continue;
+    }
 
     const outcomes = await getOutcomes(marketId);
-    if (outcomes.length === 0) continue;
+    if (outcomes.length === 0) {
+      log("DEBUG", "No outcomes for market", { marketId });
+      continue;
+    }
 
     // Insert raw post
     const { data: rawPost, error: rawError } = await supabase
@@ -366,15 +283,21 @@ async function processTweet(
       continue;
     }
 
-    log("INFO", "Inserted raw post", { x_post_id: tweet.id, marketId, rawPostId: rawPost.id });
+    log("INFO", "📥 Inserted raw post", {
+      x_post_id: tweet.id,
+      marketId,
+      rawPostId: rawPost.id,
+      text: tweet.text.slice(0, 100) + (tweet.text.length > 100 ? "..." : ""),
+    });
 
-    // Skip scoring for simple retweets
+    // Skip scoring for simple retweets (they still get stored for metrics)
     if (isRetweet && !isQuoteRetweet) {
       log("DEBUG", "Skipping scoring for simple retweet", { x_post_id: tweet.id });
       continue;
     }
 
     // Score with Grok
+    log("INFO", "🤖 Scoring tweet with Grok...", { x_post_id: tweet.id });
     const scoreResult = await scoreTweet(
       { text: tweet.text, author_id: tweet.author_id },
       market,
@@ -401,10 +324,12 @@ async function processTweet(
       continue;
     }
 
-    log("INFO", "Scored tweet", {
+    log("INFO", "✅ Scored tweet", {
       x_post_id: tweet.id,
       marketId,
       relevance: scoreResult.scores.relevance,
+      stance: scoreResult.scores.stance,
+      stance_label: scoreResult.display_labels.stance_label,
     });
 
     // Update probability if relevant enough
@@ -443,7 +368,8 @@ async function updateProbability(
   }
 
   // Apply Bayesian-ish update based on stance and strength
-  const updateStrength = scores.relevance * scores.strength * scores.credibility * 0.05;
+  const updateStrength =
+    scores.relevance * scores.strength * scores.credibility * 0.05;
   const stanceDirection = scores.stance;
 
   // Simple update: shift probabilities based on stance
@@ -453,8 +379,14 @@ async function updateProbability(
     const secondary = outcomeIds[1];
 
     const shift = updateStrength * stanceDirection;
-    currentProbs[primary] = Math.max(0.01, Math.min(0.99, currentProbs[primary] + shift));
-    currentProbs[secondary] = Math.max(0.01, Math.min(0.99, currentProbs[secondary] - shift));
+    currentProbs[primary] = Math.max(
+      0.01,
+      Math.min(0.99, currentProbs[primary] + shift)
+    );
+    currentProbs[secondary] = Math.max(
+      0.01,
+      Math.min(0.99, currentProbs[secondary] - shift)
+    );
 
     // Normalize
     const total = Object.values(currentProbs).reduce((a, b) => a + b, 0);
@@ -476,17 +408,20 @@ async function updateProbability(
     probabilities: currentProbs,
   });
 
-  log("INFO", "Updated probabilities", { marketId, probabilities: currentProbs });
+  log("INFO", "📊 Updated probabilities", { marketId, probabilities: currentProbs });
 }
 
 // Connect to filtered stream
 async function connectToStream(): Promise<void> {
   const url = new URL(`${X_API_BASE}/tweets/search/stream`);
-  url.searchParams.set("tweet.fields", "author_id,created_at,public_metrics,referenced_tweets");
+  url.searchParams.set(
+    "tweet.fields",
+    "author_id,created_at,public_metrics,referenced_tweets"
+  );
   url.searchParams.set("expansions", "author_id,referenced_tweets.id");
   url.searchParams.set("user.fields", "verified,public_metrics");
 
-  log("INFO", "Connecting to X filtered stream...");
+  log("INFO", "🔌 Connecting to X filtered stream...");
 
   while (true) {
     try {
@@ -498,13 +433,18 @@ async function connectToStream(): Promise<void> {
 
       if (!response.ok) {
         const text = await response.text();
-        log("ERROR", "Stream connection failed", { status: response.status, body: text });
+        log("ERROR", "Stream connection failed", {
+          status: response.status,
+          body: text.slice(0, 500),
+        });
 
         // Rate limit handling
         if (response.status === 429) {
           const resetTime = response.headers.get("x-rate-limit-reset");
-          const waitMs = resetTime ? (parseInt(resetTime) * 1000 - Date.now()) : 60000;
-          log("WARN", "Rate limited, waiting", { waitMs });
+          const waitMs = resetTime
+            ? parseInt(resetTime) * 1000 - Date.now()
+            : 60000;
+          log("WARN", "⏳ Rate limited, waiting", { waitMs });
           await sleep(Math.max(waitMs, 5000));
         } else {
           await sleep(5000);
@@ -522,7 +462,7 @@ async function connectToStream(): Promise<void> {
       const decoder = new TextDecoder();
       let buffer = "";
 
-      log("INFO", "Connected to stream");
+      log("INFO", "✅ Connected to stream! Waiting for tweets...");
 
       while (true) {
         const { done, value } = await reader.read();
@@ -545,10 +485,11 @@ async function connectToStream(): Promise<void> {
               const tweet = data.data;
               const matchingRules = data.matching_rules || [];
 
-              log("INFO", "Received tweet", {
+              log("INFO", "🐦 Received tweet", {
                 id: tweet.id,
                 author_id: tweet.author_id,
-                rules: matchingRules.map((r: any) => r.tag),
+                text: tweet.text.slice(0, 80) + (tweet.text.length > 80 ? "..." : ""),
+                rules: matchingRules.map((r: { tag: string }) => r.tag),
               });
 
               await processTweet(tweet, matchingRules);
@@ -573,19 +514,19 @@ function sleep(ms: number): Promise<void> {
 
 // Main entry point
 async function main(): Promise<void> {
-  log("INFO", "Starting ingestion worker");
+  log("INFO", "🚀 Starting ingestion worker");
+  log("INFO", "=============================================");
+  log("INFO", "This worker ONLY processes tweets for markets");
+  log("INFO", "that have active stream rules.");
+  log("INFO", "");
+  log("INFO", "To activate a market:");
+  log("INFO", "1. Create a new market via the UI");
+  log("INFO", "2. Stream rules are automatically registered");
+  log("INFO", "3. Matching tweets will appear here");
+  log("INFO", "=============================================");
 
-  // Initial sync of rules
-  const markets = await getActiveMarkets();
-  log("INFO", "Found active markets", { count: markets.length });
-
-  await syncRules(markets);
-
-  // Periodically sync rules (every 5 minutes)
-  setInterval(async () => {
-    const updatedMarkets = await getActiveMarkets();
-    await syncRules(updatedMarkets);
-  }, 5 * 60 * 1000);
+  // Display current rules (for debugging)
+  await displayCurrentRules();
 
   // Connect to stream
   await connectToStream();
@@ -595,4 +536,3 @@ main().catch((error) => {
   log("ERROR", "Fatal error", { error: String(error) });
   process.exit(1);
 });
-

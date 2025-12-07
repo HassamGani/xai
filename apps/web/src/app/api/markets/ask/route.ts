@@ -103,6 +103,54 @@ export async function POST(request: NextRequest) {
       probabilities: initialProbabilities
     });
 
+    // Step 7: Create initial market state
+    await supabase.from("market_state").upsert({
+      market_id: market.id,
+      probabilities: initialProbabilities,
+      updated_at: new Date().toISOString()
+    });
+
+    // Step 8: Activate X filtered stream for this market
+    let streamActivated = false;
+    try {
+      const X_BEARER_TOKEN = process.env.X_BEARER_TOKEN;
+      if (X_BEARER_TOKEN && marketData.x_rule_templates.length > 0) {
+        const rules = marketData.x_rule_templates.map((template: string, index: number) => ({
+          value: template,
+          tag: `market:${market.id}:${index}`,
+        }));
+
+        console.log(`[ask] Activating stream for market ${market.id} with ${rules.length} rules`);
+
+        const addResponse = await fetch(
+          "https://api.twitter.com/2/tweets/search/stream/rules",
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${X_BEARER_TOKEN}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ add: rules }),
+          }
+        );
+
+        if (addResponse.ok) {
+          const result = await addResponse.json();
+          console.log("[ask] Stream rules activated:", result.meta);
+          streamActivated = true;
+
+          // Update market to mark stream as active
+          await supabase.from("markets").update({ stream_active: true }).eq("id", market.id);
+        } else {
+          const errorText = await addResponse.text();
+          console.error("[ask] Failed to activate stream:", errorText);
+        }
+      }
+    } catch (streamError) {
+      console.error("[ask] Error activating stream:", streamError);
+      // Don't fail the whole request if stream activation fails
+    }
+
     return NextResponse.json({
       action: "created",
       marketId: market.id,
@@ -115,7 +163,10 @@ export async function POST(request: NextRequest) {
         outcomes: marketData.outcomes,
         x_rule_templates: marketData.x_rule_templates
       },
-      message: "Market created successfully"
+      streamActivated,
+      message: streamActivated 
+        ? "Market created and X stream activated! Tweets will start appearing shortly."
+        : "Market created successfully (stream activation pending)"
     });
   } catch (error) {
     console.error("Ask endpoint error:", error);
