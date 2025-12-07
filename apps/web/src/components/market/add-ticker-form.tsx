@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 type Props = {
   marketId: string;
   existingLabels: string[];
+  onChange?: () => void;
 };
 
 function isSimilarLabel(label: string, existing: string) {
@@ -22,7 +23,7 @@ function isSimilarLabel(label: string, existing: string) {
   return jaccard >= 0.6;
 }
 
-export function AddTickerForm({ marketId, existingLabels }: Props) {
+export function AddTickerForm({ marketId, existingLabels, onChange }: Props) {
   const [label, setLabel] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -57,6 +58,7 @@ export function AddTickerForm({ marketId, existingLabels }: Props) {
       }
       setLabel("");
       router.refresh();
+      onChange?.();
     } catch (e) {
       setError("Network error");
     } finally {

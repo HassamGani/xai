@@ -12,6 +12,7 @@ import { GrokAnalysis } from "@/components/market/grok-analysis";
 import { Button } from "@/components/ui/button";
 import { DeleteMarketButton } from "@/components/market/delete-market-button";
 import { AddTickerForm } from "@/components/market/add-ticker-form";
+import { RemoveTickerButton } from "@/components/market/remove-ticker-button";
 
 type Props = {
   params: { id: string };
@@ -154,7 +155,28 @@ export default async function MarketPage({ params }: Props) {
         <div className="border border-destructive/30 rounded-lg p-4 space-y-3">
           <p className="text-sm font-medium text-destructive">Developer-only controls</p>
           <DeleteMarketButton marketId={marketId} />
-          <AddTickerForm marketId={marketId} existingLabels={outcomes.map((o) => o.label)} />
+          <div className="space-y-2">
+            <p className="text-sm font-medium">Add ticker</p>
+            <AddTickerForm
+              marketId={marketId}
+              existingLabels={outcomes.map((o) => o.label)}
+              onChange={() => {}}
+            />
+          </div>
+          <div className="space-y-2">
+            <p className="text-sm font-medium">Remove ticker</p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {outcomes.map((o) => (
+                <RemoveTickerButton
+                  key={o.id}
+                  marketId={marketId}
+                  outcomeId={o.outcome_id}
+                  label={o.label}
+                  onChange={() => {}}
+                />
+              ))}
+            </div>
+          </div>
         </div>
       )}
 
