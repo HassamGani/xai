@@ -45,18 +45,25 @@ export async function GET(
       .order("timestamp", { ascending: true })
       .limit(50);
 
-    // Get recent high-relevance posts for context
-    const { data: recentPosts } = await supabase
+    // Get recent posts for context (simpler query without join)
+    const { data: scoredPosts } = await supabase
       .from("scored_posts")
-      .select(`
-        scores,
-        display_labels,
-        scored_at,
-        raw_posts!inner(text, author_id, author_followers)
-      `)
+      .select("raw_post_id, scores, display_labels, scored_at")
       .eq("market_id", marketId)
       .order("scored_at", { ascending: false })
       .limit(15);
+
+    // Get raw posts separately
+    const rawPostIds = (scoredPosts ?? []).map(p => p.raw_post_id);
+    const { data: rawPosts } = rawPostIds.length > 0 
+      ? await supabase.from("raw_posts").select("id, text, author_id, author_followers").in("id", rawPostIds)
+      : { data: [] };
+    
+    const rawPostMap = new Map((rawPosts ?? []).map(p => [p.id, p]));
+    const recentPosts = (scoredPosts ?? []).map(sp => ({
+      ...sp,
+      raw_posts: rawPostMap.get(sp.raw_post_id)
+    }));
 
     // Format data for Grok
     const outcomesStr = (outcomes ?? [])
