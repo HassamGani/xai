@@ -154,9 +154,9 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
             secondsVisible: false
           },
           localization: {
-            timeFormatter: (ts) => {
-              const num = typeof ts === "number" ? ts : (ts as any);
-              return formatLocalTime(Number(num));
+            timeFormatter: (ts: number | { timestamp: number }) => {
+              const val = typeof ts === "number" ? ts : (ts as any)?.timestamp ?? (ts as any);
+              return formatLocalTime(Number(val));
             }
           },
           crosshair: {
