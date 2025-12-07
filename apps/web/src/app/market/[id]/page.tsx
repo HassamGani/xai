@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { DeleteMarketButton } from "@/components/market/delete-market-button";
 import { AddTickerForm } from "@/components/market/add-ticker-form";
 import { RemoveTickerButton } from "@/components/market/remove-ticker-button";
+import { LivePanel } from "@/components/market/live-panel";
 
 type Props = {
   params: { id: string };
@@ -145,9 +146,11 @@ export default async function MarketPage({ params }: Props) {
         isResolved={isResolved}
       />
 
-      <OutcomeCards 
-        outcomes={outcomeProbs} 
-        updatedAt={state?.updated_at}
+      <LivePanel
+        marketId={marketId}
+        outcomes={outcomes}
+        state={state}
+        snapshots={snapshots}
         winningOutcomeId={winningOutcome?.id}
       />
 
@@ -177,11 +180,6 @@ export default async function MarketPage({ params }: Props) {
           </div>
         </div>
       )}
-
-      <div className="space-y-3">
-        <h2 className="text-lg font-semibold">Probability over time</h2>
-        <ProbabilityChart series={chartSeries} />
-      </div>
 
       {/* Grok Analysis */}
       <div className="space-y-3">
