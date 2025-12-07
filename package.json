@@ -8,9 +8,9 @@
     "services/*"
   ],
   "scripts": {
-    "dev": "cd apps/web && next dev",
-    "build": "cd apps/web && next build",
-    "lint": "cd apps/web && next lint",
+    "dev": "npm run dev -w web",
+    "build": "npm run build -w web",
+    "lint": "npm run lint -w web",
     "format": "prettier --check .",
     "format:fix": "prettier --write .",
     "test": "vitest run"
