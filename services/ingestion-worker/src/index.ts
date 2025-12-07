@@ -359,10 +359,8 @@ async function processTweet(
       stance_label: scoreResult.display_labels.stance_label,
     });
 
-    // Update probability if relevant enough (lowered threshold to capture more signal)
-    if (scoreResult.scores.relevance >= 0.15) {
-      await updateProbability(marketId, outcomes, scoreResult.scores);
-    }
+    // Update probability for all scored tweets (even low relevance contributes small signal)
+    await updateProbability(marketId, outcomes, scoreResult.scores);
 
     // Update market post count
     await supabase
