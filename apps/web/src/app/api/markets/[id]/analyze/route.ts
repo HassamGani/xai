@@ -226,6 +226,7 @@ Search the web for recent news about "${market.question}" and provide your analy
 
     // Attempt to generate an illustrative image for the prediction
     let imageUrl: string | null = null;
+    let imageError: string | null = null;
     const imagePromptParts: string[] = [];
     try {
       const topOutcome = (outcomes ?? [])
@@ -247,6 +248,7 @@ Search the web for recent news about "${market.question}" and provide your analy
 
       const imagePrompt = imagePromptParts.join(" ");
 
+      // First attempt: ask for URL
       const imgRes = await fetch("https://api.x.ai/v1/images/generations", {
         method: "POST",
         headers: {
@@ -258,7 +260,7 @@ Search the web for recent news about "${market.question}" and provide your analy
           prompt: imagePrompt,
           n: 1,
           size: "512x512",
-          response_format: "b64_json"
+          response_format: "url"
         })
       });
 
@@ -271,11 +273,44 @@ Search the web for recent news about "${market.question}" and provide your analy
           imageUrl = `data:image/png;base64,${imgJson.data[0].b64_json}`;
         }
       } else {
-        const errTxt = await imgRes.text();
-        console.warn("Image generation skipped, status:", imgRes.status, errTxt);
+        imageError = `url attempt status ${imgRes.status}: ${await imgRes.text()}`;
+      }
+
+      // Fallback: request b64_json if no URL
+      if (!imageUrl) {
+        const imgRes2 = await fetch("https://api.x.ai/v1/images/generations", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${apiKey}`
+          },
+          body: JSON.stringify({
+            model: "grok-2-image-latest",
+            prompt: imagePrompt,
+            n: 1,
+            size: "512x512",
+            response_format: "b64_json"
+          })
+        });
+
+        if (imgRes2.ok) {
+          const imgJson2 = await imgRes2.json();
+          const url2 = imgJson2?.data?.[0]?.url;
+          if (url2) {
+            imageUrl = url2;
+          } else if (imgJson2?.data?.[0]?.b64_json) {
+            imageUrl = `data:image/png;base64,${imgJson2.data[0].b64_json}`;
+          }
+        } else {
+          const errTxt2 = await imgRes2.text();
+          imageError = imageError
+            ? `${imageError}; b64 attempt status ${imgRes2.status}: ${errTxt2}`
+            : `b64 attempt status ${imgRes2.status}: ${errTxt2}`;
+        }
       }
     } catch (imgErr) {
       console.warn("Image generation error:", imgErr);
+      imageError = String(imgErr);
     }
 
     return NextResponse.json({
@@ -284,7 +319,8 @@ Search the web for recent news about "${market.question}" and provide your analy
       depth,
       generated_at: new Date().toISOString(),
       market_id: marketId,
-      image_url: imageUrl
+      image_url: imageUrl,
+      image_error: imageError
     });
   } catch (error) {
     console.error("Analysis endpoint error:", error);
