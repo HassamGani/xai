@@ -12,6 +12,9 @@ const envSchema = z.object({
 
 const env = envSchema.parse(process.env);
 
+// Simple in-memory cache for author lookups to avoid repeat hits
+const usernameCache = new Map<string, string>();
+
 // Initialize Supabase client
 const supabase: SupabaseClient = createClient(
   env.SUPABASE_URL,
@@ -264,8 +267,13 @@ async function processTweet(
     }
 
     // Map author username from expansions (if available)
-    const authorUsername =
+    let authorUsername =
       expansions?.users?.find((u) => u.id === tweet.author_id)?.username ?? null;
+
+    // If expansions didn't include username, fetch once from X and cache
+    if (!authorUsername) {
+      authorUsername = await fetchUsername(tweet.author_id);
+    }
 
     // Insert raw post
     const { data: rawPost, error: rawError } = await supabase
@@ -519,6 +527,32 @@ async function connectToStream(): Promise<void> {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Fetch username from X API as a fallback when expansions omit it
+async function fetchUsername(authorId: string): Promise<string | null> {
+  if (usernameCache.has(authorId)) return usernameCache.get(authorId) || null;
+
+  try {
+    const res = await fetch(`${X_API_BASE}/users/${authorId}?user.fields=username`, {
+      headers: { Authorization: `Bearer ${env.X_BEARER_TOKEN}` },
+    });
+
+    if (!res.ok) {
+      log("WARN", "Failed to fetch username", { authorId, status: res.status });
+      return null;
+    }
+
+    const data = await res.json();
+    const username = data?.data?.username || null;
+    if (username) {
+      usernameCache.set(authorId, username);
+    }
+    return username;
+  } catch (error) {
+    log("WARN", "Username lookup error", { authorId, error: String(error) });
+    return null;
+  }
 }
 
 // Main entry point

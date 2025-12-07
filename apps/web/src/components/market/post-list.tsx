@@ -140,6 +140,7 @@ export function PostList({ marketId, posts, emptyMessage = "No curated posts yet
   const [hasMore, setHasMore] = useState(true);
   const [avatars, setAvatars] = useState<Record<string, string>>({});
   const [loadingAvatars, setLoadingAvatars] = useState<Set<string>>(new Set());
+  const [autoRequested, setAutoRequested] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
 
   // Fetch existing avatars on mount or data change
@@ -156,6 +157,22 @@ export function PostList({ marketId, posts, emptyMessage = "No curated posts yet
       })
       .catch(console.error);
   }, [data]);
+
+  // Auto-generate avatars for authors missing one (small batch to avoid bursts)
+  useEffect(() => {
+    const missing = data
+      .map((p) => p.author_id)
+      .filter((id): id is string => !!id && !avatars[id] && !autoRequested.has(id));
+
+    if (missing.length === 0) return;
+
+    // Limit to first 3 to reduce load per render
+    const toGenerate = missing.slice(0, 3);
+    toGenerate.forEach((authorId) => {
+      setAutoRequested((prev) => new Set(prev).add(authorId));
+      generateAvatar(authorId, data.find((p) => p.author_id === authorId)?.text || undefined);
+    });
+  }, [data, avatars, autoRequested]);
 
   // Sync when SSR posts change
   useEffect(() => {
