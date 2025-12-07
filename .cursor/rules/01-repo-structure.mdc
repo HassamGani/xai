@@ -1,0 +1,24 @@
+---
+description: Monorepo structure + responsibilities (web vs workers vs shared)
+globs: ["**/*"]
+alwaysApply: true
+---
+
+# Repo layout (enforce)
+- apps/web/                 # Next.js app (Vercel)
+- packages/shared/          # shared types, zod schemas, probability math, utils
+- services/ingestion-worker/# long-lived X filtered stream consumer
+- services/scoring-worker/  # optional: batch Grok scorer (can be merged with ingestion-worker initially)
+- supabase/                 # migrations, seed, edge functions (optional), config
+
+# Ownership rules
+- apps/web: NO long-lived loops, NO queue consumers. Stateless request handlers only.
+- services/*: can run infinite loops, scheduled batching, retries, backoff.
+- packages/shared: pure functions only; no network I/O; deterministic.
+- supabase/: migrations are authoritative schema; app code must match.
+
+# Shared typing rules
+- All DTOs in packages/shared/src/contracts/*
+- All LLM JSON schemas in packages/shared/src/llm/*
+- All probability math in packages/shared/src/probability/*
+

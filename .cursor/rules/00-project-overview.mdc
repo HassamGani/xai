@@ -1,0 +1,38 @@
+---
+description: Project overview + non-negotiables for X-powered prediction markets (Next.js+Supabase+Vercel)
+globs: ["**/*"]
+alwaysApply: true
+---
+
+# Product Definition (source of truth)
+We are building an AI-powered “Kalshi-like” probability ticker platform:
+
+- Users ASK questions → system creates/joins a Market with discrete outcomes.
+- X (Twitter) public posts feed evidence.
+- Grok scores posts (relevance/stance/strength/credibility).
+- A deterministic aggregation computes outcome probabilities (softmax + smoothing).
+- UI shows ONLY: probabilities, history chart, curated labeled posts. Never raw internals.
+
+# Hard Constraints
+- NOT building an order-book, trading, or real-money market mechanics.
+- No “resampling” engagement metrics for old posts (ingest-time only).
+- Never expose raw Grok scores, raw post pools, or rule templates to end users.
+
+# Deployment Reality (must follow)
+- Vercel serverless cannot safely run long-lived streaming connections.
+- Therefore: filtered-stream ingestion must run in a separate long-lived worker service.
+- Next.js (Vercel) handles: UI + public API reads + authenticated actions + webhook receivers (if applicable).
+- Supabase is the system of record (Postgres) + Auth + optional Realtime.
+
+# Codebase Goals
+- TypeScript everywhere.
+- Zod-validated boundaries for: LLM JSON, inbound webhooks, API payloads.
+- Idempotent ingestion (dedupe by x_post_id).
+- Database-first: migrations, RLS, indexes, backfills.
+
+# Data Flow (canonical)
+Ask → (dedupe) → Market created → X rules created → Worker ingests posts → DB raw_posts → scorer batches → DB scored_posts → aggregator updates market_probabilities + snapshots → UI subscribes/reads.
+
+# Safety / Compliance
+- Do not store secrets in code. Use env vars and .env.example only.
+- Be conservative with external content display (sanitize + truncate).

@@ -1,0 +1,28 @@
+---
+description: Next.js App Router standards (server/client split, data fetching, perf)
+globs: ["apps/web/**/*"]
+alwaysApply: true
+---
+
+# Next.js conventions
+- Use App Router (app/). Prefer Server Components by default.
+- Client components only when needed (interactivity, subscriptions, charts).
+- Route handlers in app/api/**/route.ts
+- Keep route handlers small; move logic to packages/shared + apps/web/src/lib/*.
+
+# Data fetching
+- Server-side: use Supabase server client (cookies-based auth).
+- Client-side: use Supabase browser client only for realtime subscriptions + light reads.
+- Never call Grok or X APIs from the browser.
+
+# UI
+- Build a Kalshi-like market page:
+  - Outcome cards with % + delta
+  - Chart with history (multi-line)
+  - Curated posts list with labels
+- Prefer a single chart lib across app. Keep it consistent.
+
+# Performance
+- Paginate posts. Never return unbounded arrays.
+- Use caching for market list + market detail (revalidate tags / caching headers).
+

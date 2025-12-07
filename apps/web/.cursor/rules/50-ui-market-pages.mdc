@@ -1,0 +1,21 @@
+---
+description: Market UI rules (Kalshi-like layout, charts, curated posts, no leaks)
+globs: ["apps/web/app/**/market*/**/*", "apps/web/src/components/**/*", "apps/web/src/app/**/*"]
+alwaysApply: false
+---
+
+# UX requirements
+- Market page shows:
+  - Outcome cards (probability %, delta, sparkline)
+  - Main chart (time series per outcome)
+  - Influential posts tabs (Most Relevant / Latest)
+
+# Critical: no internal leakage
+- Do not show raw Grok fields, raw E_o evidence, or raw rule templates.
+- “Why this moved” can be high-level using display labels only.
+
+# Data loading
+- Fetch market_state + snapshots server-side.
+- Posts list paginated/infinite scroll.
+- Optional realtime: subscribe to market_state changes via Supabase Realtime.
+

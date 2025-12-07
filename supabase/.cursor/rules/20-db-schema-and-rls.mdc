@@ -1,0 +1,33 @@
+---
+description: Database schema rules + indexing + invariants for markets/probabilities/posts
+globs: ["supabase/**/*", "**/*.sql"]
+alwaysApply: true
+---
+
+# Canonical tables (expected)
+- markets
+- outcomes
+- x_rules (or market_x_rules)
+- raw_posts (ingested)
+- scored_posts (per-post per-market outcome scores)
+- probability_snapshots (time series)
+- market_state (current probabilities + counts) OR materialized view equivalent
+
+# Required invariants
+- markets.normalized_question is unique-ish (enforce via unique index + similarity logic).
+- outcomes are mutually exclusive + collectively exhaustive for a market.
+- raw_posts unique on (x_post_id) and store ingested_at.
+- scored_posts unique on (raw_post_id, market_id) and stores structured scores JSONB.
+- market_state has one row per market_id.
+
+# Indexing requirements (must add)
+- markets(normalized_question)
+- outcomes(market_id)
+- raw_posts(market_id, ingested_at desc)
+- scored_posts(market_id, scored_at desc)
+- probability_snapshots(market_id, timestamp desc)
+
+# RLS expectations
+- Public SELECT for markets/outcomes/market_state/probability_snapshots/posts_to_display.
+- Writes only for authenticated users where relevant (ask-market), else service role / RPC.
+

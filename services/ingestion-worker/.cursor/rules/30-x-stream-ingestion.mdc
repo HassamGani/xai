@@ -1,0 +1,28 @@
+---
+description: X filtered-stream ingestion worker (long-lived process, retries, dedupe)
+globs: ["services/ingestion-worker/**/*"]
+alwaysApply: true
+---
+
+# Why this exists
+- This worker is the ONLY component allowed to hold long-lived connections to X.
+- It must be deployable on a long-lived runtime (Fly.io/Render/Railway/etc).
+
+# Responsibilities
+- Manage X filtered stream rules per market (create/update/delete).
+- Maintain a streaming connection OR accept webhooks (depending on X capability).
+- On each post:
+  - validate shape
+  - enrich with author expansions if available
+  - write to supabase raw_posts (idempotent)
+  - enqueue scoring job (DB table-based queue) OR call scoring worker
+
+# Reliability
+- Implement exponential backoff + reconnect loop.
+- Persist a checkpoint cursor if X provides it; otherwise dedupe strictly by x_post_id.
+- Never crash the whole process on a single bad payload.
+
+# Cost / rate limits
+- No resampling. No periodic lookups for old posts.
+- Batch DB inserts.
+

@@ -1,0 +1,24 @@
+---
+description: API route hardening (auth, internal endpoints, validation, idempotency)
+globs: ["apps/web/app/api/**/*"]
+alwaysApply: true
+---
+
+# General API rules
+- Every route validates input with Zod (from packages/shared).
+- Return consistent error shape: { error: { code, message, details? } }
+- Never leak internal stack traces to clients.
+
+# AuthN/AuthZ
+- Public reads: markets list/detail/history/posts are public unless we decide otherwise.
+- Writes (ask market, admin/internal ingest): must require auth or signed secret.
+
+# Internal endpoints
+- /api/internal/* must require a shared secret header (e.g. X_INTERNAL_SECRET).
+- Verify webhook signatures if X webhooks are used.
+- Idempotency: repeated ingestion requests must not duplicate data.
+
+# Rate limiting
+- Add basic rate limiting to public write routes (ask-market).
+- Reject abusive traffic early.
+

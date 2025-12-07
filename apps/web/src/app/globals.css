@@ -1,0 +1,52 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 222 33% 6%;
+  --foreground: 213 30% 92%;
+  --card: 220 25% 12%;
+  --card-foreground: 213 30% 92%;
+  --popover: 220 20% 10%;
+  --popover-foreground: 213 30% 92%;
+  --primary: 212 80% 52%;
+  --primary-foreground: 210 40% 98%;
+  --secondary: 171 61% 45%;
+  --secondary-foreground: 210 40% 98%;
+  --muted: 220 16% 22%;
+  --muted-foreground: 215 16% 72%;
+  --accent: 268 75% 65%;
+  --accent-foreground: 222 47% 11%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 210 40% 98%;
+  --border: 220 40% 30%;
+  --input: 220 40% 30%;
+  --ring: 212 80% 52%;
+}
+
+* {
+  @apply border-border;
+}
+
+body {
+  min-height: 100vh;
+  background: radial-gradient(circle at 20% 20%, rgba(39, 94, 254, 0.22), transparent 32%),
+    radial-gradient(circle at 80% 0%, rgba(16, 185, 129, 0.18), transparent 26%),
+    radial-gradient(circle at 40% 80%, rgba(180, 83, 255, 0.18), transparent 30%),
+    linear-gradient(135deg, #060912 0%, #0d1424 45%, #0a182e 100%);
+  color: hsl(var(--foreground));
+  -webkit-font-smoothing: antialiased;
+}
+
+.glass {
+  @apply border border-white/15 bg-white/5 backdrop-blur-xl shadow-[0_20px_70px_rgba(0,0,0,0.35)];
+}
+
+.glass-strong {
+  @apply border border-white/18 bg-white/8 backdrop-blur-2xl shadow-[0_25px_80px_rgba(0,0,0,0.4)];
+}
+
+a {
+  @apply text-primary hover:underline;
+}
+

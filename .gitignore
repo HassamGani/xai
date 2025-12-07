@@ -1,0 +1,29 @@
+# Node / build
+node_modules/
+.next/
+dist/
+build/
+coverage/
+out/
+
+# Logs
+*.log
+
+# Env / secrets
+.env
+.env.*
+
+# Supabase local
+supabase/.temp/
+supabase/.branches/
+supabase/.cache/
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
+
+# Data
+data/
+tmp/
+

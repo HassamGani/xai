@@ -1,0 +1,19 @@
+---
+description: Quality bar (testing, linting, observability, PR discipline)
+globs: ["**/*"]
+alwaysApply: true
+---
+
+# Testing
+- Unit test pure functions (probability engine, parsing, zod schemas).
+- Integration tests for API routes (happy path + auth failure + invalid payload).
+
+# Logging/metrics
+- Workers: structured logs (json), include market_id, x_post_id, batch_id.
+- Web: minimal logs, no PII, no secrets.
+- Prefer a single error tracker (Sentry or similar) and wire both web + workers.
+
+# Code style
+- No any-types on boundaries; validate + narrow.
+- Keep functions small; prefer explicit names over cleverness.
+

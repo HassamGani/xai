@@ -1,0 +1,26 @@
+---
+description: Supabase in Next.js (clients, auth patterns, RLS expectations)
+globs: ["apps/web/**/*.{ts,tsx}", "supabase/**/*"]
+alwaysApply: true
+---
+
+# Supabase clients
+- Server: createServerClient with cookies.
+- Browser: createBrowserClient for realtime + lightweight reads only.
+- Never embed service role key in the web app.
+
+# RLS
+- Assume RLS is ON for all tables.
+- Public read tables must have explicit SELECT policies.
+- Internal writes should go through:
+  - worker using service role (server-side only), or
+  - security-definer RPCs where appropriate.
+
+# Types
+- Generate DB types and commit them OR generate during CI:
+  - supabase gen types typescript --local > packages/shared/src/db/types.ts
+- App code must use those types.
+
+# Migrations
+- Schema changes only via supabase/migrations/*.sql (no ad-hoc).
+

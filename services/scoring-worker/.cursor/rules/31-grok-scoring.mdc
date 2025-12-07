@@ -1,0 +1,27 @@
+---
+description: Grok batch scoring worker (schemas, batching, retries, deterministic outputs)
+globs: ["services/scoring-worker/**/*", "services/**/grok/**/*", "packages/shared/src/llm/**/*"]
+alwaysApply: true
+---
+
+# Grok integration rules
+- All Grok responses MUST be strict JSON.
+- Validate with Zod before accepting.
+- If invalid: retry with a "repair" prompt; if still invalid: mark job failed with reason.
+
+# Batching
+- Score posts in batches (target 16–32).
+- Group by market to avoid repeating context.
+- Enforce max prompt size; split batches deterministically.
+
+# Outputs we need (per post)
+- relevance: 0..1
+- stance per outcome: -1..1
+- strength: 0..1
+- credibility: 0..1
+- optional short explanation for display-label generation (separate step)
+
+# Separation of concerns
+- “Scoring prompt” is NOT user-facing.
+- “Labeling prompt” generates stance_label/credibility_label/reason for UI, separately.
+

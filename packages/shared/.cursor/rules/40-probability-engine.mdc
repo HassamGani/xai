@@ -1,0 +1,34 @@
+---
+description: Probability engine rules (evidence accumulation, softmax, smoothing, snapshots)
+globs: ["packages/shared/src/probability/**/*", "apps/web/src/lib/probability/**/*", "services/**/probability/**/*"]
+alwaysApply: true
+---
+
+# Core algorithm (must implement)
+For each post p and outcome o:
+
+- signal_weight = relevance * abs(stance_o) * strength * credibility
+- metric_weight = f(log(followers+1), verified, account_age_days, initial_metrics)
+- delta_E_o = sign(stance_o) * signal_weight * metric_weight
+
+Evidence accumulates:
+
+- E_o(t) = Σ delta_E_o
+
+Map to probabilities:
+
+- P(o|t) = softmax(E_o / temperature)
+
+# Smoothing / stability
+- Apply EMA smoothing on probabilities (configurable alpha).
+- Enforce floors (e.g. min 0.001) and renormalize.
+- Record probability snapshots on an interval AND when change exceeds threshold.
+
+# Active pool vs history
+- Posts expire from the *active pool* after T hours (config).
+- Their evidence remains in E_o; expiration only affects recency-weighted features (if any).
+- Keep the “no resampling” rule.
+
+# Determinism
+- Same inputs must produce same probabilities (pure function in shared package).
+

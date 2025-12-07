@@ -1,0 +1,30 @@
+# Dependencies / builds
+node_modules/
+.next/
+dist/
+build/
+coverage/
+out/
+
+# Logs
+*.log
+
+# Local env (never index secrets)
+.env
+.env.*
+!.env.example
+
+# Supabase local
+supabase/.temp/
+supabase/.branches/
+supabase/.cache/
+
+# OS/editor noise
+.DS_Store
+.vscode/
+.idea/
+
+# Large datasets (if any)
+data/
+tmp/
+
