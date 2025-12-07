@@ -1,4 +1,4 @@
-import { getSupabaseServer } from "./supabase/server";
+import { getSupabaseServer, getSupabaseAdmin } from "./supabase/server";
 import { getSupabaseAdmin } from "./supabase/server";
 
 export type MarketRow = {
@@ -84,7 +84,7 @@ export async function listMarkets() {
 }
 
 export async function getMarket(marketId: string) {
-  const supabase = getSupabaseServer();
+  const supabase = getSupabaseAdmin() || getSupabaseServer();
   if (!supabase) {
     return {
       market: null,
@@ -123,7 +123,7 @@ export async function getMarket(marketId: string) {
 }
 
 export async function getMarketPosts(marketId: string, limit = 20) {
-  const supabase = getSupabaseServer();
+  const supabase = getSupabaseAdmin() || getSupabaseServer();
   if (!supabase) return [];
 
   // Get scored posts
