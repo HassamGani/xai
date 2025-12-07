@@ -47,19 +47,22 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
     chartRef.current = chart;
 
     series.forEach((s) => {
-      const opts = {
+      const opts: Record<string, unknown> = {
         color: s.color,
         lineWidth: 2,
         priceFormat: { type: "price", minMove: 0.001 },
         lastValueVisible: true,
         title: s.label
       };
-      // lightweight-charts v5 uses addSeries; some builds may still expose addLineSeries. Use whichever exists.
-      const line: ISeriesApi<"Line"> =
-        (chart as any).addLineSeries?.(opts) ??
-        (chart as any).addSeries?.({ type: "Line" }) ??
-        chart.addSeries?.({ type: "Line" });
-      line.applyOptions(opts);
+      // lightweight-charts v5 changed addSeries signature; cast to any to support both v4 and v5
+      const chartAny = chart as unknown as Record<string, unknown>;
+      let line: ISeriesApi<"Line">;
+      if (typeof chartAny.addLineSeries === "function") {
+        line = (chartAny.addLineSeries as (o: Record<string, unknown>) => ISeriesApi<"Line">)(opts);
+      } else {
+        line = (chartAny.addSeries as (o: Record<string, unknown>) => ISeriesApi<"Line">)({ type: "Line" });
+        line.applyOptions(opts as Parameters<typeof line.applyOptions>[0]);
+      }
       line.setData(s.data);
       seriesRefs.current.set(s.id, line);
     });
@@ -88,4 +91,3 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
 
   return <div ref={containerRef} className="w-full" style={{ height }} />;
 }
-
