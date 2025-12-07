@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -118,6 +119,14 @@ export function ExperimentsPanel({ experiments: initial }: Props) {
                 >
                   {runLoading === exp.id ? "Running..." : "Run"}
                 </Button>
+              </div>
+              <div className="mt-3 flex items-center gap-3 text-xs">
+                <Link
+                  href={`/experiments/${exp.id}`}
+                  className="text-primary hover:underline font-medium"
+                >
+                  View experiment
+                </Link>
               </div>
             </div>
           ))}
