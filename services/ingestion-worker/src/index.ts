@@ -359,8 +359,8 @@ async function processTweet(
       stance_label: scoreResult.display_labels.stance_label,
     });
 
-    // Update probability if relevant enough
-    if (scoreResult.scores.relevance >= 0.3) {
+    // Update probability if relevant enough (lowered threshold to capture more signal)
+    if (scoreResult.scores.relevance >= 0.15) {
       await updateProbability(marketId, outcomes, scoreResult.scores);
     }
 
