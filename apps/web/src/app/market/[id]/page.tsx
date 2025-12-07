@@ -61,7 +61,8 @@ export default async function MarketPage({ params }: Props) {
 
   const posts = await getMarketPosts(marketId, 25);
 
-  const showDevDelete = process.env.NODE_ENV !== "production";
+  // Show dev controls by default for hackathon; can disable with NEXT_PUBLIC_SHOW_DEV_CONTROLS=false
+  const showDevDelete = process.env.NEXT_PUBLIC_SHOW_DEV_CONTROLS !== "false";
 
   const outcomeProbs = outcomes.map((o) => ({
     id: o.id,
