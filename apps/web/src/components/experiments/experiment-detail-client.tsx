@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { ProbabilityChart } from "@/components/market/probability-chart";
-import { RunExperimentButton } from "@/components/experiments/run-experiment-button";
+import { OutcomeCards } from "@/components/market/outcome-cards";
+import { ExperimentPosts } from "@/components/experiments/experiment-posts";
 
 type Snapshot = {
   timestamp: string;
@@ -48,6 +49,7 @@ export function ExperimentDetailClient({ experiment, lastRun, snapshots: initial
   const [error, setError] = useState<string | null>(null);
   const [posts, setPosts] = useState<any[]>([]);
   const [postsLoading, setPostsLoading] = useState(false);
+  const [timeRange, setTimeRange] = useState<"all" | "custom">("all");
 
   const fetchDetail = async () => {
     setLoading(true);
@@ -82,21 +84,59 @@ export function ExperimentDetailClient({ experiment, lastRun, snapshots: initial
   }, [runInfo]);
 
   const outcomeLabels = (experiment.outcomes || []).map((o) => o.label);
-  const series = outcomeLabels.map((label, idx) => ({
-    id: label,
-    label,
-    color: CHART_COLORS[idx % CHART_COLORS.length],
-    data: (snapshots || []).map((s) => ({
+
+  // Compute data min/max for experiment timeline
+  const minTs = snapshots.length
+    ? Math.min(...snapshots.map((s) => new Date(s.timestamp).getTime() / 1000))
+    : null;
+  const maxTs = snapshots.length
+    ? Math.max(...snapshots.map((s) => new Date(s.timestamp).getTime() / 1000))
+    : null;
+
+  const series = outcomeLabels.map((label, idx) => {
+    const dataPoints = (snapshots || []).map((s) => ({
       time: Math.floor(new Date(s.timestamp).getTime() / 1000),
       value: (s.probabilities as Record<string, number>)[label] ?? 0
-    }))
-  }));
+    }));
+    return {
+      id: label,
+      label,
+      color: CHART_COLORS[idx % CHART_COLORS.length],
+      data: dataPoints
+    };
+  });
+
+  const latestSnapshot = snapshots?.[snapshots.length - 1];
+  const currentProbs = latestSnapshot
+    ? outcomeLabels.map((label, idx) => ({
+        id: `exp-${idx}`,
+        label,
+        probability: (latestSnapshot.probabilities as Record<string, number>)[label] ?? 0
+      }))
+    : [];
 
   return (
     <div className="rounded-2xl border border-border bg-card/70 p-4 shadow-sm">
+      {currentProbs.length > 0 && (
+        <div className="mb-4">
+          <OutcomeCards outcomes={currentProbs} updatedAt={latestSnapshot?.timestamp} />
+        </div>
+      )}
       <div className="flex items-center justify-between mb-2">
-        <h3 className="text-sm font-semibold">Probability timeline</h3>
-        <RunExperimentButton experimentId={experiment.id} onFinished={fetchDetail} />
+        <div className="flex items-center gap-3">
+          <h3 className="text-sm font-semibold">Probability timeline</h3>
+          {minTs && maxTs && (
+            <p className="text-[11px] text-muted-foreground">
+              {new Date(minTs * 1000).toLocaleDateString()} →{" "}
+              {new Date(maxTs * 1000).toLocaleDateString()}
+            </p>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" onClick={fetchDetail} disabled={loading}>
+            {loading ? "Refreshing..." : "Refresh"}
+          </Button>
+        </div>
       </div>
       {error && <p className="text-xs text-destructive mb-2">{error}</p>}
       {runInfo && (
@@ -113,23 +153,8 @@ export function ExperimentDetailClient({ experiment, lastRun, snapshots: initial
       ) : (
         <ProbabilityChart series={series} height={320} />
       )}
-      <div className="mt-4 space-y-2">
-        <h4 className="text-sm font-semibold">Recent posts (sample)</h4>
-        {postsLoading && <p className="text-xs text-muted-foreground">Loading posts...</p>}
-        {!postsLoading && posts.length === 0 && (
-          <p className="text-xs text-muted-foreground">No posts stored for this experiment.</p>
-        )}
-        <div className="space-y-2">
-          {posts.map((p) => (
-            <div key={p.id} className="rounded-lg border border-border bg-card/60 p-3">
-              <div className="text-xs text-muted-foreground mb-1">
-                @{p.author_username || p.author_id || "unknown"} •{" "}
-                {p.post_created_at ? new Date(p.post_created_at).toLocaleString() : ""}
-              </div>
-              <p className="text-sm text-foreground whitespace-pre-wrap">{p.text}</p>
-            </div>
-          ))}
-        </div>
+      <div className="mt-6">
+        <ExperimentPosts experimentId={experiment.id} />
       </div>
     </div>
   );
