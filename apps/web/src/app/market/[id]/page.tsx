@@ -12,17 +12,22 @@ type Props = {
 
 function toSeries(
   snapshots: { timestamp: string; probabilities: Record<string, number> }[],
-  outcomes: { id: string; label: string }[]
+  outcomes: { id: string; outcome_id: string; label: string }[]
 ) {
   const palette = ["#2563eb", "#16a34a", "#a855f7", "#f97316", "#0ea5e9", "#e11d48", "#84cc16"];
   return outcomes.map((o, idx) => ({
     id: o.id,
     label: o.label,
     color: palette[idx % palette.length],
-    data: snapshots.map((s) => ({
-      time: Math.floor(new Date(s.timestamp).getTime() / 1000),
-      value: (s.probabilities ?? {})[o.id] ?? 0
-    }))
+    data: snapshots.map((s) => {
+      // Try both outcome_id and trimmed version (some data has leading spaces)
+      const probs = s.probabilities ?? {};
+      const value = probs[o.outcome_id] ?? probs[o.outcome_id.trim()] ?? probs[" " + o.outcome_id] ?? 0;
+      return {
+        time: Math.floor(new Date(s.timestamp).getTime() / 1000),
+        value
+      };
+    })
   }));
 }
 
@@ -39,11 +44,16 @@ export default async function MarketPage({ params }: Props) {
 
   const posts = await getMarketPosts(marketId, 25);
 
-  const outcomeProbs = outcomes.map((o) => ({
-    id: o.id,
-    label: o.label,
-    probability: state?.probabilities?.[o.id] ?? o.current_probability ?? 0
-  }));
+  const outcomeProbs = outcomes.map((o) => {
+    // Try both outcome_id and trimmed version (some data has leading spaces)
+    const probs = state?.probabilities ?? {};
+    const probability = probs[o.outcome_id] ?? probs[o.outcome_id.trim()] ?? probs[" " + o.outcome_id] ?? o.current_probability ?? 0;
+    return {
+      id: o.id,
+      label: o.label,
+      probability
+    };
+  });
 
   const chartSeries = toSeries(snapshots, outcomes);
 
@@ -85,4 +95,3 @@ export default async function MarketPage({ params }: Props) {
     </div>
   );
 }
-
