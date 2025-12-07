@@ -135,7 +135,7 @@ export default async function MarketPage({ params }: Props) {
         normalizedQuestion={market.normalized_question}
         estimatedResolutionDate={market.estimated_resolution_date}
         resolutionCriteria={market.resolution_criteria}
-        totalPostsProcessed={market.total_posts_processed}
+        totalPostsProcessed={market.total_posts_processed ?? undefined}
         isResolved={isResolved}
       />
 
