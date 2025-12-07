@@ -91,16 +91,29 @@ export function ExperimentDetailClient({ experiment, lastRun, snapshots: initial
 
   const outcomeLabels = (experiment.outcomes || []).map((o) => o.label);
 
+  // Always have at least one snapshot to render a chart: fallback uniform snapshot if none yet
+  const fallbackSnapshot =
+    outcomeLabels.length > 0
+      ? {
+          timestamp: new Date().toISOString(),
+          probabilities: Object.fromEntries(
+            outcomeLabels.map((l) => [l, 1 / outcomeLabels.length])
+          )
+        }
+      : null;
+
+  const displaySnapshots = snapshots.length > 0 ? snapshots : fallbackSnapshot ? [fallbackSnapshot] : [];
+
   // Compute data min/max for experiment timeline
-  const minTs = snapshots.length
-    ? Math.min(...snapshots.map((s) => new Date(s.timestamp).getTime() / 1000))
+  const minTs = displaySnapshots.length
+    ? Math.min(...displaySnapshots.map((s) => new Date(s.timestamp).getTime() / 1000))
     : null;
-  const maxTs = snapshots.length
-    ? Math.max(...snapshots.map((s) => new Date(s.timestamp).getTime() / 1000))
+  const maxTs = displaySnapshots.length
+    ? Math.max(...displaySnapshots.map((s) => new Date(s.timestamp).getTime() / 1000))
     : null;
 
   const series = outcomeLabels.map((label, idx) => {
-    const dataPoints = (snapshots || []).map((s) => ({
+    const dataPoints = displaySnapshots.map((s) => ({
       time: Math.floor(new Date(s.timestamp).getTime() / 1000),
       value: (s.probabilities as Record<string, number>)[label] ?? 0
     }));
@@ -112,7 +125,7 @@ export function ExperimentDetailClient({ experiment, lastRun, snapshots: initial
     };
   });
 
-  const latestSnapshot = snapshots?.[snapshots.length - 1];
+  const latestSnapshot = displaySnapshots?.[displaySnapshots.length - 1];
   const currentProbs = latestSnapshot
     ? outcomeLabels.map((label, idx) => ({
         id: `exp-${idx}`,
