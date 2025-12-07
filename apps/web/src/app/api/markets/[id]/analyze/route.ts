@@ -226,19 +226,26 @@ Search the web for recent news about "${market.question}" and provide your analy
 
     // Attempt to generate an illustrative image for the prediction
     let imageUrl: string | null = null;
+    const imagePromptParts: string[] = [];
     try {
       const topOutcome = (outcomes ?? [])
         .slice()
         .sort((a, b) => (b.current_probability ?? 0) - (a.current_probability ?? 0))[0];
 
-      const imagePrompt = [
-        `Create a photorealistic, news-style image that illustrates the predicted outcome for this market: "${market.question}".`,
-        topOutcome ? `Focus on the "${topOutcome.label}" scenario as if it is realized.` : "",
-        "If it is a sports prediction, show real teams/players/colors celebrating a win with stadium atmosphere.",
-        "If it is an election or person, show the person in a plausible real-world victory or key-moment setting.",
-        "If it's about dates or milestones, use symbolic but realistic imagery tied to the event.",
-        "No overlaid text. High detail, cinematic lighting."
-      ].filter(Boolean).join(" ");
+      imagePromptParts.push(
+        `Create a photorealistic, news-style image illustrating the predicted outcome for this market: "${market.question}".`
+      );
+      if (topOutcome) {
+        imagePromptParts.push(`Focus on the "${topOutcome.label}" scenario as if it has occurred.`);
+      }
+      imagePromptParts.push(
+        "If sports: show real teams/players/colors in a plausible celebration or decisive moment.",
+        "If politics or people: show the person(s) in a believable event setting (speech, podium, crowd), no caricatures.",
+        "If date/milestone: use realistic symbolism tied to the event.",
+        "No overlaid text. Photorealistic. Cinematic lighting. Editorial/news photography style."
+      );
+
+      const imagePrompt = imagePromptParts.join(" ");
 
       const imgRes = await fetch("https://api.x.ai/v1/images/generations", {
         method: "POST",
@@ -258,9 +265,14 @@ Search the web for recent news about "${market.question}" and provide your analy
       if (imgRes.ok) {
         const imgJson = await imgRes.json();
         const url = imgJson?.data?.[0]?.url;
-        if (url) imageUrl = url;
+        if (url) {
+          imageUrl = url;
+        } else if (imgJson?.data?.[0]?.b64_json) {
+          imageUrl = `data:image/png;base64,${imgJson.data[0].b64_json}`;
+        }
       } else {
-        console.warn("Image generation skipped, status:", imgRes.status);
+        const errTxt = await imgRes.text();
+        console.warn("Image generation skipped, status:", imgRes.status, errTxt);
       }
     } catch (imgErr) {
       console.warn("Image generation error:", imgErr);
