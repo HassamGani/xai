@@ -12,7 +12,9 @@ export async function GET(
     const apiKey = process.env.GROK_API_KEY;
     
     if (!apiKey) {
-      return NextResponse.json({ error: "Analysis not available" }, { status: 503 });
+      return NextResponse.json({ 
+        error: "Grok API key not configured. Add GROK_API_KEY to environment variables." 
+      }, { status: 503 });
     }
 
     const supabase = getSupabaseServer();
@@ -120,6 +122,8 @@ ${postsContext || "No recent posts"}
 
 Please provide your analysis of what's driving these probabilities and any notable patterns or events.`;
 
+    console.log("Calling Grok API for market analysis:", marketId);
+    
     const response = await fetch(GROK_API_URL, {
       method: "POST",
       headers: {
@@ -139,14 +143,19 @@ Please provide your analysis of what's driving these probabilities and any notab
 
     if (!response.ok) {
       const err = await response.text();
-      console.error("Grok API error:", err);
-      return NextResponse.json({ error: "Analysis failed" }, { status: 500 });
+      console.error("Grok API error:", response.status, err);
+      return NextResponse.json({ 
+        error: `Grok API error: ${response.status}. Check API key and quota.` 
+      }, { status: 500 });
     }
 
     const data = await response.json();
+    console.log("Grok API response received");
+    
     const analysis = data.choices?.[0]?.message?.content;
 
     if (!analysis) {
+      console.error("No analysis in Grok response:", JSON.stringify(data).slice(0, 500));
       return NextResponse.json({ error: "No analysis generated" }, { status: 500 });
     }
 
