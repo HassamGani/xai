@@ -16,10 +16,11 @@ function formatPct(p: number) {
   return `${(p * 100).toFixed(1)}%`;
 }
 
-function getProbColor(p: number, isWinner?: boolean) {
+function getProbColorByRank(rank: number, isWinner?: boolean) {
   if (isWinner) return "text-emerald-600 dark:text-emerald-400";
-  if (p >= 0.5) return "text-emerald-600 dark:text-emerald-400";
-  if (p >= 0.3) return "text-amber-600 dark:text-amber-400";
+  // rank is 0-based after sorting descending
+  if (rank === 0) return "text-emerald-600 dark:text-emerald-400";
+  if (rank === 1) return "text-amber-600 dark:text-amber-400";
   return "text-rose-600 dark:text-rose-400";
 }
 
@@ -68,7 +69,7 @@ export function OutcomeCards({ outcomes, updatedAt, winningOutcomeId }: Props) {
                 </CardTitle>
               </CardHeader>
               <CardContent className="relative pt-0">
-                <div className={`text-3xl font-bold tabular-nums ${getProbColor(o.probability, isWinner)}`}>
+                <div className={`text-3xl font-bold tabular-nums ${getProbColorByRank(idx, isWinner)}`}>
                   {formatPct(o.probability)}
                 </div>
               </CardContent>
