@@ -15,9 +15,10 @@ type Props = {
   height?: number;
 };
 
-type TimeRange = "1d" | "1w" | "1m" | "all";
+type TimeRange = "1h" | "1d" | "1w" | "1m" | "all";
 
 const TIME_RANGES: { value: TimeRange; label: string; seconds: number | null }[] = [
+  { value: "1h", label: "1H", seconds: 60 * 60 },
   { value: "1d", label: "1D", seconds: 24 * 60 * 60 },
   { value: "1w", label: "1W", seconds: 7 * 24 * 60 * 60 },
   { value: "1m", label: "1M", seconds: 30 * 24 * 60 * 60 },
@@ -45,7 +46,8 @@ const formatLocalTime = (tsSeconds: number) => {
     month: "short",
     day: "numeric",
     hour: "numeric",
-    minute: "2-digit"
+    minute: "2-digit",
+    timeZoneName: "short"
   }).format(new Date(tsSeconds * 1000));
 };
 
