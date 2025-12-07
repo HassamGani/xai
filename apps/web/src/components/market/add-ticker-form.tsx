@@ -24,7 +24,6 @@ function isSimilarLabel(label: string, existing: string) {
 
 export function AddTickerForm({ marketId, existingLabels }: Props) {
   const [label, setLabel] = useState("");
-  const [rule, setRule] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -32,13 +31,8 @@ export function AddTickerForm({ marketId, existingLabels }: Props) {
   const handleSubmit = async () => {
     setError(null);
     const trimmedLabel = label.trim();
-    const trimmedRule = rule.trim();
     if (trimmedLabel.length < 2) {
       setError("Label too short");
-      return;
-    }
-    if (trimmedRule.length < 3) {
-      setError("Rule template required");
       return;
     }
     // local similarity check
@@ -46,18 +40,15 @@ export function AddTickerForm({ marketId, existingLabels }: Props) {
       setError("Ticker already exists or is too similar");
       return;
     }
-    const devSecret = window.prompt("Enter developer secret to add ticker:");
-    if (!devSecret) return;
 
     setLoading(true);
     try {
       const res = await fetch(`/api/markets/${marketId}/add-ticker`, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
-          "x-dev-secret": devSecret,
+          "Content-Type": "application/json"
         },
-        body: JSON.stringify({ label: trimmedLabel, rule_template: trimmedRule }),
+        body: JSON.stringify({ label: trimmedLabel }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -65,7 +56,6 @@ export function AddTickerForm({ marketId, existingLabels }: Props) {
         return;
       }
       setLabel("");
-      setRule("");
       router.refresh();
     } catch (e) {
       setError("Network error");
@@ -82,12 +72,6 @@ export function AddTickerForm({ marketId, existingLabels }: Props) {
           onChange={(e) => setLabel(e.target.value)}
           className="w-full rounded border border-input bg-background px-3 py-2 text-sm"
           placeholder="Ticker label (e.g., Spain)"
-        />
-        <input
-          value={rule}
-          onChange={(e) => setRule(e.target.value)}
-          className="w-full rounded border border-input bg-background px-3 py-2 text-sm"
-          placeholder='X rule (e.g., "Spain World Cup" OR "#FIFA2026")'
         />
       </div>
       <div className="flex items-center gap-3">

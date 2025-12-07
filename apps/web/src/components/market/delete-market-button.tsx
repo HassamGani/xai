@@ -23,14 +23,11 @@ export function DeleteMarketButton({ marketId }: Props) {
     const confirm2 = window.confirm("This cannot be undone. Confirm delete?");
     if (!confirm2) return;
 
-    const devSecret = window.prompt("Enter developer secret to confirm:");
-    if (!devSecret) return;
-
     setLoading(true);
     try {
       const res = await fetch(`/api/markets/${marketId}/delete`, {
         method: "POST",
-        headers: { "x-dev-secret": devSecret }
+        headers: { "Content-Type": "application/json" }
       });
       const data = await res.json();
       if (!res.ok) {

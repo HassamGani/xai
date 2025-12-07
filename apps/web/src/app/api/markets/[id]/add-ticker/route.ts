@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { createMarketFromQuestion } from "@/lib/grok";
 
 type OutcomeRow = {
   id: string;
@@ -40,18 +41,12 @@ export async function POST(
 ) {
   const { id: marketId } = await params;
 
-  const devSecret = request.headers.get("x-dev-secret");
-  const internalSecret = process.env.INTERNAL_DEV_SECRET;
-  if (!internalSecret || devSecret !== internalSecret) {
-    return jsonResponse({ error: "Unauthorized" }, 401);
-  }
-
   const supabase = getSupabaseAdmin();
   if (!supabase) return jsonResponse({ error: "Database not configured" }, 503);
 
   const body = await request.json();
   const label: string = body?.label?.trim();
-  const ruleTemplate: string = body?.rule_template?.trim();
+  const ruleTemplate: string | undefined = body?.rule_template?.trim();
   const initialProb: number = Math.min(Math.max(body?.initial_probability ?? 0.05, 0.01), 0.2);
 
   if (!label || label.length < 2) return jsonResponse({ error: "Label required" }, 400);
@@ -97,9 +92,34 @@ export async function POST(
     scaledProbs[k] = scaledProbs[k] / total;
   }
 
-  // Normalize rule template (-is:retweet lang:en)
-  const normalizedRule = `${ruleTemplate}${ruleTemplate.toLowerCase().includes("is:retweet") ? "" : " -is:retweet"}${ruleTemplate.toLowerCase().includes("lang:") ? "" : " lang:en"}`.trim();
-  const newRuleTemplates = [...(market.x_rule_templates ?? []), normalizedRule];
+  // Generate/normalize rule template (-is:retweet lang:en)
+  let normalizedRule: string | undefined;
+  if (ruleTemplate) {
+    normalizedRule = `${ruleTemplate}${ruleTemplate.toLowerCase().includes("is:retweet") ? "" : " -is:retweet"}${ruleTemplate.toLowerCase().includes("lang:") ? "" : " lang:en"}`.trim();
+  } else {
+    // Ask Grok to propose a filter rule for this ticker
+    try {
+      const prompt = `You are generating X (Twitter) filtered stream rules for a prediction market outcome.
+
+Outcome label: "${label}"
+Market question: "${market.question}"
+
+Return a single best rule that will capture relevant tweets, and exclude retweets and non-English by adding "-is:retweet lang:en" if not already present.
+Return ONLY the rule string.`;
+      const grok = await createMarketFromQuestion(prompt); // reuse client; we just need a rule template
+      const candidate = grok.x_rule_templates?.[0];
+      if (candidate) {
+        normalizedRule = `${candidate}${candidate.toLowerCase().includes("is:retweet") ? "" : " -is:retweet"}${candidate.toLowerCase().includes("lang:") ? "" : " lang:en"}`.trim();
+      }
+    } catch {
+      // fallback
+      normalizedRule = `${label} ${market.question} -is:retweet lang:en`;
+    }
+  }
+
+  const newRuleTemplates = normalizedRule
+    ? [...(market.x_rule_templates ?? []), normalizedRule]
+    : market.x_rule_templates ?? [];
 
   // Insert outcome
   const { error: insertErr } = await supabase.from("outcomes").insert({
@@ -129,10 +149,9 @@ export async function POST(
 
   // Add X rules live if bearer token exists
   const bearer = process.env.X_BEARER_TOKEN;
-  if (bearer) {
+  if (bearer && normalizedRule) {
     const tagPrefix = `market:${marketId}:`;
-    // find next index
-    const nextIdx = (market.x_rule_templates?.length ?? 0);
+    const nextIdx = market.x_rule_templates?.length ?? 0;
     const addBody = { add: [{ value: normalizedRule, tag: `${tagPrefix}${nextIdx}` }] };
     await fetch("https://api.twitter.com/2/tweets/search/stream/rules", {
       method: "POST",
