@@ -16,10 +16,13 @@ type Props = {
 
 type TimeRange = "1d" | "1w" | "1m" | "all";
 
-type HoverData = {
-  time: string;
-  values: { label: string; color: string; value: number }[];
-} | null;
+type TooltipData = {
+  x: number;
+  y: number;
+  label: string;
+  color: string;
+  value: number;
+}[];
 
 const TIME_RANGES: { value: TimeRange; label: string; seconds: number | null }[] = [
   { value: "1d", label: "1D", seconds: 24 * 60 * 60 },
@@ -35,7 +38,7 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
   const [timeRange, setTimeRange] = useState<TimeRange>("all");
-  const [hoverData, setHoverData] = useState<HoverData>(null);
+  const [tooltips, setTooltips] = useState<TooltipData>([]);
 
   useEffect(() => {
     setMounted(true);
@@ -56,15 +59,19 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
   });
 
   const handleCrosshairMove = useCallback((param: unknown) => {
-    const p = param as { time?: number; seriesData?: Map<unknown, { value?: number }> };
+    const p = param as { 
+      time?: number; 
+      point?: { x: number; y: number };
+      seriesData?: Map<unknown, { value?: number }>;
+    };
     
-    if (!p.time || !p.seriesData) {
-      setHoverData(null);
+    if (!p.time || !p.point || !p.seriesData || !chartRef.current) {
+      setTooltips([]);
       return;
     }
 
-    const time = new Date(p.time * 1000).toLocaleString();
-    const values: { label: string; color: string; value: number }[] = [];
+    const tips: TooltipData = [];
+    const chart = chartRef.current as { timeScale: () => { width: () => number } };
 
     // Get values from each series
     for (const s of series) {
@@ -72,20 +79,25 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
       if (seriesRef) {
         const data = p.seriesData.get(seriesRef);
         if (data && typeof data.value === "number") {
-          values.push({
-            label: s.label,
-            color: s.color,
-            value: data.value
-          });
+          // Calculate Y coordinate for this series value
+          const priceScale = (seriesRef as { priceToCoordinate: (price: number) => number | null }).priceToCoordinate(data.value);
+          
+          if (priceScale !== null) {
+            tips.push({
+              x: p.point.x,
+              y: priceScale,
+              label: s.label,
+              color: s.color,
+              value: data.value
+            });
+          }
         }
       }
     }
 
-    if (values.length > 0) {
-      setHoverData({ time, values });
-    } else {
-      setHoverData(null);
-    }
+    // Sort by value desc to handle overlapping (higher value = higher on screen generally)
+    tips.sort((a, b) => b.value - a.value);
+    setTooltips(tips);
   }, [series]);
 
   useEffect(() => {
@@ -148,7 +160,7 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
             secondsVisible: false
           },
           crosshair: {
-            mode: 0,
+            mode: 1, // Magnet mode
             vertLine: {
               width: 1,
               color: "rgba(255,255,255,0.4)",
@@ -156,9 +168,12 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
               labelBackgroundColor: "rgba(59, 130, 246, 0.9)"
             },
             horzLine: {
-              visible: false // Hide horizontal line since we show all values in tooltip
+              visible: false,
+              labelVisible: false
             }
-          }
+          },
+          handleScale: false,
+          handleScroll: false
         });
         chartRef.current = chart;
         seriesMapRef.current.clear();
@@ -171,13 +186,12 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
               color: s.color,
               lineWidth: 2,
               title: s.label,
-              lastValueVisible: false, // Hide last value labels on right
+              lastValueVisible: false,
               priceLineVisible: false,
               crosshairMarkerVisible: true,
-              crosshairMarkerRadius: 6,
-              crosshairMarkerBorderWidth: 2,
+              crosshairMarkerRadius: 4,
               crosshairMarkerBorderColor: s.color,
-              crosshairMarkerBackgroundColor: "#1e293b"
+              crosshairMarkerBackgroundColor: s.color // Solid dot
             };
 
             let line: unknown;
@@ -278,54 +292,27 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
     );
   }
 
-  // Get latest values for legend when not hovering
-  const latestValues = series.map((s) => {
-    const lastPoint = s.data[s.data.length - 1];
-    return {
-      label: s.label,
-      color: s.color,
-      value: lastPoint?.value ?? 0
-    };
-  });
-
-  const displayValues = hoverData?.values ?? latestValues;
-
   return (
     <div className="space-y-3">
       {/* Time range selector */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-1 p-1 bg-white/5 rounded-lg">
-          {TIME_RANGES.map((range) => (
-            <button
-              key={range.value}
-              onClick={() => setTimeRange(range.value)}
-              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
-                timeRange === range.value
-                  ? "bg-blue-500/80 text-white shadow-sm"
-                  : "text-muted-foreground hover:text-foreground hover:bg-white/10"
-              }`}
-            >
-              {range.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Live values display */}
-        <div className="flex items-center gap-4 text-sm">
-          {displayValues.map((v) => (
-            <div key={v.label} className="flex items-center gap-2">
-              <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: v.color }} />
-              <span className="text-muted-foreground">{v.label}:</span>
-              <span className="font-semibold tabular-nums" style={{ color: v.color }}>
-                {(v.value * 100).toFixed(1)}%
-              </span>
-            </div>
-          ))}
-        </div>
+      <div className="flex items-center gap-1 p-1 bg-white/5 rounded-lg w-fit">
+        {TIME_RANGES.map((range) => (
+          <button
+            key={range.value}
+            onClick={() => setTimeRange(range.value)}
+            className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
+              timeRange === range.value
+                ? "bg-blue-500/80 text-white shadow-sm"
+                : "text-muted-foreground hover:text-foreground hover:bg-white/10"
+            }`}
+          >
+            {range.label}
+          </button>
+        ))}
       </div>
 
       {/* Chart container */}
-      <div className="relative">
+      <div className="relative group cursor-crosshair">
         {hasFilteredData ? (
           <div ref={containerRef} className="w-full rounded bg-white/5" style={{ height }} />
         ) : (
@@ -334,12 +321,28 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
           </div>
         )}
 
-        {/* Hover timestamp */}
-        {hoverData && (
-          <div className="absolute top-2 left-2 text-xs text-muted-foreground bg-black/50 px-2 py-1 rounded backdrop-blur-sm">
-            {hoverData.time}
+        {/* Floating Tooltips */}
+        {tooltips.map((tip) => (
+          <div
+            key={tip.label}
+            className="absolute pointer-events-none flex items-center gap-2 transform -translate-y-1/2 z-10 transition-transform duration-75"
+            style={{
+              left: tip.x + 10, // Offset to right of cursor
+              top: tip.y,
+            }}
+          >
+            <div 
+              className="px-2 py-1 rounded shadow-lg backdrop-blur-md border border-white/10 text-xs font-medium flex items-center gap-2"
+              style={{ backgroundColor: "rgba(0,0,0,0.7)" }}
+            >
+              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: tip.color }} />
+              <span className="text-white whitespace-nowrap">{tip.label}</span>
+              <span className="font-bold tabular-nums" style={{ color: tip.color }}>
+                {(tip.value * 100).toFixed(1)}%
+              </span>
+            </div>
           </div>
-        )}
+        ))}
       </div>
     </div>
   );
