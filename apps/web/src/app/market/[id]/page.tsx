@@ -6,24 +6,21 @@ import { getMarket, getMarketPosts } from "@/lib/markets";
 import { OutcomeCards } from "@/components/market/outcome-cards";
 import { ProbabilityChart } from "@/components/market/probability-chart";
 import { PostList } from "@/components/market/post-list";
+import { ResolutionBanner } from "@/components/market/resolution-banner";
+import { MarketInfo } from "@/components/market/market-info";
 import { Button } from "@/components/ui/button";
 
 type Props = {
   params: { id: string };
 };
 
-// Helper to find probability value with flexible key matching
 function findProb(probs: Record<string, number> | null | undefined, outcomeId: string): number {
   if (!probs) return 0;
-  // Try exact match
   if (outcomeId in probs) return probs[outcomeId];
-  // Try trimmed
   const trimmed = outcomeId.trim();
   if (trimmed in probs) return probs[trimmed];
-  // Try with leading space
   const withSpace = " " + trimmed;
   if (withSpace in probs) return probs[withSpace];
-  // Search all keys for case-insensitive match
   for (const key of Object.keys(probs)) {
     if (key.trim().toLowerCase() === trimmed.toLowerCase()) {
       return probs[key];
@@ -69,12 +66,6 @@ export default async function MarketPage({ params }: Props) {
 
   const chartSeries = toSeries(snapshots, outcomes);
 
-  // Debug log
-  console.log("Market:", market.id, "Outcomes:", outcomes.map(o => o.outcome_id), "Snapshots:", snapshots.length);
-  if (snapshots.length > 0) {
-    console.log("First snapshot probs keys:", Object.keys(snapshots[0].probabilities || {}));
-  }
-
   const displayPosts = posts.map((p) => ({
     id: p.scored.id,
     text: p.raw?.text,
@@ -85,11 +76,17 @@ export default async function MarketPage({ params }: Props) {
     credibility_label: p.scored.display_labels?.credibility_label,
     summary: p.scored.display_labels?.summary,
     reason: p.scored.display_labels?.reason,
-    // Add relevance score for sorting
     relevance_score: p.scored.scores 
       ? Math.max(...Object.values(p.scored.scores as unknown as Record<string, { relevance: number }>).map(s => s?.relevance ?? 0)) 
       : 0
   }));
+
+  // Find winning outcome label if resolved
+  const winningOutcome = market.resolved_outcome_id 
+    ? outcomes.find((o) => o.id === market.resolved_outcome_id)
+    : null;
+
+  const isResolved = !!market.resolved_at;
 
   return (
     <div className="space-y-6">
@@ -105,17 +102,48 @@ export default async function MarketPage({ params }: Props) {
         </Link>
       </div>
 
+      {/* Resolution Banner (if resolved) */}
+      {isResolved && winningOutcome && (
+        <ResolutionBanner
+          winningOutcome={winningOutcome.label}
+          resolvedAt={market.resolved_at}
+          resolutionSummary={market.resolution_summary}
+          resolutionSource={market.resolution_source}
+        />
+      )}
+
+      {/* Market Header */}
       <div className="space-y-2">
-        <p className="text-sm text-muted-foreground">
-          Created {new Date(market.created_at).toLocaleString()}
-        </p>
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <span>Created {new Date(market.created_at).toLocaleDateString()}</span>
+          {isResolved && (
+            <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-medium">
+              Resolved
+            </span>
+          )}
+          {!isResolved && (
+            <span className="px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 text-xs font-medium">
+              Active
+            </span>
+          )}
+        </div>
         <h1 className="text-2xl font-semibold">{market.question}</h1>
-        <p className="text-sm text-muted-foreground">
-          Normalized: {market.normalized_question ?? "n/a"}
-        </p>
       </div>
 
-      <OutcomeCards outcomes={outcomeProbs} updatedAt={state?.updated_at} />
+      {/* Market Info Card (resolution date, criteria) */}
+      <MarketInfo
+        normalizedQuestion={market.normalized_question}
+        estimatedResolutionDate={market.estimated_resolution_date}
+        resolutionCriteria={market.resolution_criteria}
+        totalPostsProcessed={market.total_posts_processed}
+        isResolved={isResolved}
+      />
+
+      <OutcomeCards 
+        outcomes={outcomeProbs} 
+        updatedAt={state?.updated_at}
+        winningOutcomeId={winningOutcome?.id}
+      />
 
       <div className="space-y-3">
         <h2 className="text-lg font-semibold">Probability over time</h2>

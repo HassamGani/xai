@@ -34,7 +34,6 @@ export async function POST(request: NextRequest) {
     const similarity = await checkSemanticSimilarity(question, existingMarkets ?? []);
 
     if (similarity.isSimilar && similarity.matchedMarketId) {
-      // Return existing market instead of creating new one
       return NextResponse.json({
         action: "existing",
         marketId: similarity.matchedMarketId,
@@ -54,7 +53,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Step 4: Insert market into database
+    // Step 4: Insert market with resolution fields
     const { data: market, error: marketError } = await supabase
       .from("markets")
       .insert({
@@ -62,7 +61,9 @@ export async function POST(request: NextRequest) {
         normalized_question: marketData.normalized_question,
         status: "active",
         x_rule_templates: marketData.x_rule_templates,
-        total_posts_processed: 0
+        total_posts_processed: 0,
+        estimated_resolution_date: marketData.estimated_resolution_date,
+        resolution_criteria: marketData.resolution_criteria
       })
       .select()
       .single();
@@ -87,7 +88,6 @@ export async function POST(request: NextRequest) {
 
     if (outcomesError) {
       console.error("Error creating outcomes:", outcomesError);
-      // Clean up market
       await supabase.from("markets").delete().eq("id", market.id);
       return NextResponse.json({ error: "Failed to create market outcomes" }, { status: 500 });
     }
@@ -110,6 +110,8 @@ export async function POST(request: NextRequest) {
         id: market.id,
         question: market.question,
         normalized_question: market.normalized_question,
+        estimated_resolution_date: market.estimated_resolution_date,
+        resolution_criteria: market.resolution_criteria,
         outcomes: marketData.outcomes,
         x_rule_templates: marketData.x_rule_templates
       },
@@ -125,4 +127,3 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
-

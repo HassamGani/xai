@@ -4,8 +4,8 @@ const GROK_API_URL = "https://api.x.ai/v1/chat/completions";
 
 const MarketCreationResponseSchema = z.object({
   normalized_question: z.string(),
-  resolution_date: z.string().nullable().optional(),
-  resolution_reason: z.string().nullable().optional(),
+  estimated_resolution_date: z.string().nullable(),
+  resolution_criteria: z.string(),
   outcomes: z.array(
     z.object({
       outcome_id: z.string(),
@@ -17,6 +17,16 @@ const MarketCreationResponseSchema = z.object({
 });
 
 export type MarketCreationResponse = z.infer<typeof MarketCreationResponseSchema>;
+
+const ResolutionCheckResponseSchema = z.object({
+  should_resolve: z.boolean(),
+  winning_outcome_id: z.string().nullable(),
+  confidence: z.number(),
+  resolution_summary: z.string(),
+  source_description: z.string()
+});
+
+export type ResolutionCheckResponse = z.infer<typeof ResolutionCheckResponseSchema>;
 
 const SimilarityCheckResponseSchema = z.object({
   is_similar: z.boolean(),
@@ -30,19 +40,31 @@ export async function createMarketFromQuestion(question: string): Promise<Market
     throw new Error("GROK_API_KEY not configured");
   }
 
-  const systemPrompt = `You are a prediction market creation assistant. Given a user question about a future event, you must:
+  const today = new Date().toISOString().split("T")[0];
+
+  const systemPrompt = `You are a prediction market creation assistant. Today's date is ${today}.
+
+Given a user question about a future event, you must:
 
 1. Normalize the question into a clear, unambiguous canonical form
-2. Determine a reasonable resolution date (when we'll know the answer)
-3. Generate 2-5 mutually exclusive, collectively exhaustive outcomes
-4. Assign prior probabilities that sum to 1.0
-5. Generate X (Twitter) filtered stream rule templates to capture relevant posts
+2. Determine when this question can be definitively resolved (estimated_resolution_date)
+3. Describe the specific criteria that would trigger resolution (resolution_criteria)
+4. Generate 2-5 mutually exclusive, collectively exhaustive outcomes
+5. Assign prior probabilities that sum to 1.0
+6. Generate X (Twitter) filtered stream rule templates to capture relevant posts
 
-Output ONLY valid JSON with this exact structure:
+For resolution timing, think carefully:
+- Elections: Resolution when official results are certified/announced
+- Sports events: When the game/match/event concludes
+- Product launches: When officially announced or released
+- Interviews/speeches: When the event occurs or shortly after
+- Open-ended questions: Set a reasonable deadline based on context
+
+Output ONLY valid JSON:
 {
   "normalized_question": "Clear canonical question ending with ?",
-  "resolution_date": "YYYY-MM-DD or null if unclear",
-  "resolution_reason": "Brief explanation of why this date",
+  "estimated_resolution_date": "YYYY-MM-DD (best estimate, or null if truly unknowable)",
+  "resolution_criteria": "Specific description of what triggers resolution, e.g. 'When the Associated Press calls the election' or 'When the interview airs and transcript is available'",
   "outcomes": [
     { "outcome_id": "snake_case_id", "label": "Human readable label", "prior_probability": 0.X }
   ],
@@ -55,7 +77,7 @@ Rules:
 - Include an "other" outcome if the question allows for unexpected results
 - x_rule_templates should be valid X API v2 filtered stream rules
 - Keep outcomes between 2-5 options
-- Be specific in the normalized question (include year, context)`;
+- Be specific and realistic about resolution dates`;
 
   const response = await fetch(GROK_API_URL, {
     method: "POST",
@@ -85,7 +107,6 @@ Rules:
     throw new Error("No content in Grok response");
   }
 
-  // Parse JSON from response (handle markdown code blocks)
   let jsonStr = content;
   const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (jsonMatch) {
@@ -94,6 +115,91 @@ Rules:
 
   const parsed = JSON.parse(jsonStr.trim());
   return MarketCreationResponseSchema.parse(parsed);
+}
+
+export async function checkMarketResolution(
+  question: string,
+  normalizedQuestion: string,
+  resolutionCriteria: string,
+  outcomes: Array<{ outcome_id: string; label: string }>
+): Promise<ResolutionCheckResponse> {
+  const apiKey = process.env.GROK_API_KEY;
+  if (!apiKey) {
+    throw new Error("GROK_API_KEY not configured");
+  }
+
+  const today = new Date().toISOString().split("T")[0];
+  const outcomesStr = outcomes.map((o) => `- ${o.outcome_id}: "${o.label}"`).join("\n");
+
+  const systemPrompt = `You are a prediction market resolution assistant with real-time knowledge. Today's date is ${today}.
+
+Your job is to determine if a prediction market question can now be definitively resolved based on real-world events that have occurred.
+
+You have access to current information about world events. Use your knowledge to determine:
+1. Whether the resolution criteria have been met
+2. Which outcome won (if resolvable)
+3. Your confidence level
+
+IMPORTANT: Only resolve if you are CERTAIN of the outcome. If the event hasn't happened yet or results aren't official, DO NOT resolve.
+
+Output ONLY valid JSON:
+{
+  "should_resolve": true/false,
+  "winning_outcome_id": "outcome_id of winner or null if not resolvable",
+  "confidence": 0.0-1.0 (only resolve if >= 0.95),
+  "resolution_summary": "Brief explanation of what happened and why this outcome won",
+  "source_description": "What source/event confirms this (e.g. 'AP called the election', 'Official press release', 'Event concluded')"
+}
+
+If should_resolve is false, set winning_outcome_id to null and explain why in resolution_summary.`;
+
+  const userPrompt = `Check if this market can be resolved:
+
+Question: ${question}
+Normalized: ${normalizedQuestion}
+Resolution Criteria: ${resolutionCriteria}
+
+Possible Outcomes:
+${outcomesStr}
+
+Can this market be definitively resolved now based on real-world events?`;
+
+  const response = await fetch(GROK_API_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({
+      model: "grok-3-latest",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt }
+      ],
+      temperature: 0.1
+    })
+  });
+
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error(`Grok API error: ${response.status} - ${err}`);
+  }
+
+  const data = await response.json();
+  const content = data.choices?.[0]?.message?.content;
+
+  if (!content) {
+    throw new Error("No content in Grok response");
+  }
+
+  let jsonStr = content;
+  const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (jsonMatch) {
+    jsonStr = jsonMatch[1];
+  }
+
+  const parsed = JSON.parse(jsonStr.trim());
+  return ResolutionCheckResponseSchema.parse(parsed);
 }
 
 export async function checkSemanticSimilarity(
@@ -106,12 +212,10 @@ export async function checkSemanticSimilarity(
 
   const apiKey = process.env.GROK_API_KEY;
   if (!apiKey) {
-    // Fallback to basic keyword matching if no API key
     const lowerNew = newQuestion.toLowerCase();
     for (const eq of existingQuestions) {
       const lowerExisting = eq.question.toLowerCase();
       const lowerNormalized = eq.normalized_question?.toLowerCase() ?? "";
-      // Simple overlap check
       const newWords = new Set(lowerNew.split(/\s+/).filter((w) => w.length > 3));
       const existingWords = new Set([...lowerExisting.split(/\s+/), ...lowerNormalized.split(/\s+/)].filter((w) => w.length > 3));
       const overlap = [...newWords].filter((w) => existingWords.has(w)).length;
@@ -166,7 +270,6 @@ Consider questions different if they:
   });
 
   if (!response.ok) {
-    // Fallback on error
     return { isSimilar: false, matchedMarketId: null, reasoning: "API error, skipping similarity check" };
   }
 
@@ -196,4 +299,3 @@ Consider questions different if they:
     return { isSimilar: false, matchedMarketId: null, reasoning: "Failed to parse similarity response" };
   }
 }
-
