@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Trash2 } from "lucide-react";
 
@@ -30,7 +29,6 @@ export function ExperimentsPanel({ experiments: initial }: Props) {
   const [experiments, setExperiments] = useState(initial);
   const [question, setQuestion] = useState("");
   const [loading, setLoading] = useState(false);
-  const [runLoading, setRunLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [listLoading, setListLoading] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -79,21 +77,6 @@ export function ExperimentsPanel({ experiments: initial }: Props) {
   useEffect(() => {
     refreshList();
   }, []);
-
-  const runExperiment = async (id: string) => {
-    setRunLoading(id);
-    setError(null);
-    try {
-      const res = await fetch(`/api/experiments/${id}/run`, { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Run failed");
-      // no-op: data contains snapshots
-    } catch (e: any) {
-      setError(e.message || "Failed to run experiment");
-    } finally {
-      setRunLoading(null);
-    }
-  };
 
   const deleteExperiment = async (id: string) => {
     if (!confirm("Delete this experiment? This will remove runs and snapshots.")) return;
@@ -188,13 +171,6 @@ export function ExperimentsPanel({ experiments: initial }: Props) {
                   )}
                 </div>
                 <div className="flex items-center gap-2">
-                  <Button
-                    size="sm"
-                    onClick={() => runExperiment(exp.id)}
-                    disabled={runLoading === exp.id}
-                  >
-                    {runLoading === exp.id ? "Running..." : "Run"}
-                  </Button>
                   <Button
                     size="sm"
                     variant="ghost"
