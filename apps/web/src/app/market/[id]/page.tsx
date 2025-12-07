@@ -10,6 +10,9 @@ import { ResolutionBanner } from "@/components/market/resolution-banner";
 import { MarketInfo } from "@/components/market/market-info";
 import { GrokAnalysis } from "@/components/market/grok-analysis";
 import { Button } from "@/components/ui/button";
+import { DeleteMarketButton } from "@/components/market/delete-market-button";
+import { AddTickerForm } from "@/components/market/add-ticker-form";
+import { DeleteMarketButton } from "@/components/market/delete-market-button";
 
 type Props = {
   params: { id: string };
@@ -58,6 +61,8 @@ export default async function MarketPage({ params }: Props) {
   if (!market) return notFound();
 
   const posts = await getMarketPosts(marketId, 25);
+
+  const showDevDelete = process.env.NODE_ENV !== "production";
 
   const outcomeProbs = outcomes.map((o) => ({
     id: o.id,
@@ -144,6 +149,14 @@ export default async function MarketPage({ params }: Props) {
         updatedAt={state?.updated_at}
         winningOutcomeId={winningOutcome?.id}
       />
+
+      {showDevDelete && (
+        <div className="border border-destructive/30 rounded-lg p-4 space-y-3">
+          <p className="text-sm font-medium text-destructive">Developer-only controls</p>
+          <DeleteMarketButton marketId={marketId} />
+          <AddTickerForm marketId={marketId} existingLabels={outcomes.map((o) => o.label)} />
+        </div>
+      )}
 
       <div className="space-y-3">
         <h2 className="text-lg font-semibold">Probability over time</h2>
