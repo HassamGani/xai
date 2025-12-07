@@ -5,6 +5,7 @@ interface MarketInfoProps {
   estimatedResolutionDate?: string | null;
   resolutionCriteria?: string | null;
   totalPostsProcessed?: number;
+  postsCount?: number;
   isResolved?: boolean;
 }
 
@@ -13,6 +14,7 @@ export function MarketInfo({
   estimatedResolutionDate,
   resolutionCriteria,
   totalPostsProcessed,
+  postsCount,
   isResolved
 }: MarketInfoProps) {
   const formatDate = (dateStr: string) => {
@@ -64,7 +66,8 @@ export function MarketInfo({
   const dateInfo = estimatedResolutionDate ? formatDate(estimatedResolutionDate) : null;
   
   // Don't render if there's nothing to show
-  const hasContent = normalizedQuestion || estimatedResolutionDate || resolutionCriteria || (totalPostsProcessed && totalPostsProcessed > 0);
+  const effectivePosts = typeof postsCount === "number" ? postsCount : totalPostsProcessed;
+  const hasContent = normalizedQuestion || estimatedResolutionDate || resolutionCriteria || (effectivePosts && effectivePosts > 0);
   if (!hasContent && !isResolved) return null;
 
   return (
@@ -130,13 +133,13 @@ export function MarketInfo({
       )}
 
       {/* Stats */}
-      {typeof totalPostsProcessed === "number" && (
+      {typeof effectivePosts === "number" && (
         <div className="flex items-center gap-3 pt-2 border-t border-border">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
             </svg>
-            <span>{totalPostsProcessed > 0 ? `${totalPostsProcessed.toLocaleString()} posts analyzed` : "Awaiting posts"}</span>
+            <span>{effectivePosts > 0 ? `${effectivePosts.toLocaleString()} posts analyzed` : "Awaiting posts"}</span>
           </div>
         </div>
       )}
