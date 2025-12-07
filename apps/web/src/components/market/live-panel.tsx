@@ -102,8 +102,14 @@ export function LivePanel({ marketId, outcomes, state, snapshots, winningOutcome
   useEffect(() => {
     const id = setInterval(() => {
       handleRefresh();
-    }, 45000);
+    }, 15000); // poll every 15s for fresher updates
     return () => clearInterval(id);
+  }, []);
+
+  // Kick off an initial refresh on mount to get freshest data
+  useEffect(() => {
+    handleRefresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
