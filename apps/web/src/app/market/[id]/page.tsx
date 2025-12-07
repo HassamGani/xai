@@ -171,7 +171,7 @@ export default async function MarketPage({ params }: Props) {
 
       <div className="space-y-3">
         <h2 className="text-lg font-semibold">Curated posts</h2>
-        <PostList posts={displayPosts} />
+        <PostList posts={displayPosts} marketId={marketId} />
       </div>
     </div>
   );
