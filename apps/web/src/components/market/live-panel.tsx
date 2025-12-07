@@ -76,7 +76,7 @@ export function LivePanel({ marketId, outcomes, state, snapshots, winningOutcome
   const handleRefresh = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/markets/${marketId}/state`);
+      const res = await fetch(`/api/markets/${marketId}/state`, { cache: "no-store" });
       if (!res.ok) return;
       const json = await res.json();
       setData({
@@ -104,15 +104,18 @@ export function LivePanel({ marketId, outcomes, state, snapshots, winningOutcome
         <Button variant="ghost" size="sm" onClick={handleRefresh} disabled={loading}>
           {loading ? "Refreshing..." : "Refresh"}
         </Button>
-        {data.state?.updated_at && (
+        { (data.state?.updated_at || data.snapshots?.at?.(-1)?.timestamp) && (
           <span className="text-xs text-muted-foreground">
-            Last updated {new Date(data.state.updated_at).toLocaleString()}
+            Last updated{" "}
+            {new Date(
+              (data.state?.updated_at as string) || (data.snapshots?.at?.(-1)?.timestamp as string)
+            ).toLocaleString()}
           </span>
         )}
       </div>
       <OutcomeCards
         outcomes={outcomeProbs}
-        updatedAt={data.state?.updated_at}
+        updatedAt={(data.state?.updated_at as string) || (data.snapshots?.at?.(-1)?.timestamp as string)}
         winningOutcomeId={winningOutcomeId}
       />
       <div className="space-y-3">
