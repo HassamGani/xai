@@ -11,6 +11,9 @@ import { MarketInfo } from "@/components/market/market-info";
 import { GrokAnalysis } from "@/components/market/grok-analysis";
 import { CorrelationInsights } from "@/components/market/correlation-insights";
 import { Button } from "@/components/ui/button";
+import { DeleteMarketButton } from "@/components/market/delete-market-button";
+import { AddTickerForm } from "@/components/market/add-ticker-form";
+import { RemoveTickerButton } from "@/components/market/remove-ticker-button";
 
 type Props = {
   params: { id: string };
@@ -59,6 +62,9 @@ export default async function MarketPage({ params }: Props) {
   if (!market) return notFound();
 
   const posts = await getMarketPosts(marketId, 25);
+
+  // Show dev controls by default for hackathon; can disable with NEXT_PUBLIC_SHOW_DEV_CONTROLS=false
+  const showDevDelete = process.env.NEXT_PUBLIC_SHOW_DEV_CONTROLS !== "false";
 
   const outcomeProbs = outcomes.map((o) => ({
     id: o.id,
@@ -146,6 +152,33 @@ export default async function MarketPage({ params }: Props) {
         winningOutcomeId={winningOutcome?.id}
       />
 
+      {showDevDelete && (
+        <div className="border border-destructive/30 rounded-lg p-4 space-y-3">
+          <p className="text-sm font-medium text-destructive">Developer-only controls</p>
+          <DeleteMarketButton marketId={marketId} />
+          <div className="space-y-2">
+            <p className="text-sm font-medium">Add ticker</p>
+            <AddTickerForm
+              marketId={marketId}
+              existingLabels={outcomes.map((o) => o.label)}
+            />
+          </div>
+          <div className="space-y-2">
+            <p className="text-sm font-medium">Remove ticker</p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {outcomes.map((o) => (
+                <RemoveTickerButton
+                  key={o.id}
+                  marketId={marketId}
+                  outcomeId={o.outcome_id}
+                  label={o.label}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="space-y-3">
         <h2 className="text-lg font-semibold">Probability over time</h2>
         <ProbabilityChart series={chartSeries} />
@@ -165,7 +198,7 @@ export default async function MarketPage({ params }: Props) {
 
       <div className="space-y-3">
         <h2 className="text-lg font-semibold">Curated posts</h2>
-        <PostList posts={displayPosts} />
+        <PostList posts={displayPosts} marketId={marketId} />
       </div>
     </div>
   );

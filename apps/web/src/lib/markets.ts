@@ -1,4 +1,4 @@
-import { getSupabaseServer } from "./supabase/server";
+import { getSupabaseServer, getSupabaseAdmin } from "./supabase/server";
 
 export type MarketRow = {
   id: string;
@@ -73,7 +73,8 @@ export type RawPostRow = {
 };
 
 export async function listMarkets() {
-  const supabase = getSupabaseServer();
+  // Prefer admin client to avoid any RLS issues when listing markets
+  const supabase = getSupabaseAdmin() || getSupabaseServer();
   if (!supabase) return [];
   const { data, error } = await supabase.from("markets").select("*").order("created_at", { ascending: false });
 
@@ -82,7 +83,7 @@ export async function listMarkets() {
 }
 
 export async function getMarket(marketId: string) {
-  const supabase = getSupabaseServer();
+  const supabase = getSupabaseAdmin() || getSupabaseServer();
   if (!supabase) {
     return {
       market: null,
@@ -121,7 +122,7 @@ export async function getMarket(marketId: string) {
 }
 
 export async function getMarketPosts(marketId: string, limit = 20) {
-  const supabase = getSupabaseServer();
+  const supabase = getSupabaseAdmin() || getSupabaseServer();
   if (!supabase) return [];
 
   // Get scored posts

@@ -19,6 +19,7 @@ type Post = {
 };
 
 type Props = {
+  marketId: string;
   posts: Post[];
   emptyMessage?: string;
 };
@@ -129,25 +130,74 @@ function generatePlaceholderAvatar(authorId: string): string {
   return `linear-gradient(135deg, ${colorPair[0]} 0%, ${colorPair[1]} 100%)`;
 }
 
-export function PostList({ posts, emptyMessage = "No curated posts yet." }: Props) {
+export function PostList({ marketId, posts, emptyMessage = "No curated posts yet." }: Props) {
   const [filter, setFilter] = useState<FilterType>("relevant");
+  const [data, setData] = useState<Post[]>(posts);
+  const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [offset, setOffset] = useState(posts.length);
+  const [hasMore, setHasMore] = useState(true);
   const [avatars, setAvatars] = useState<Record<string, string>>({});
   const [loadingAvatars, setLoadingAvatars] = useState<Set<string>>(new Set());
 
-  // Fetch existing avatars on mount
+  // Fetch existing avatars on mount or data change
   useEffect(() => {
-    const authorIds = [...new Set(posts.map(p => p.author_id).filter(Boolean))] as string[];
+    const authorIds = [...new Set(data.map((p) => p.author_id).filter(Boolean))] as string[];
     if (authorIds.length === 0) return;
 
     fetch(`/api/avatars/generate?ids=${authorIds.join(",")}`)
-      .then(res => res.json())
-      .then(data => {
+      .then((res) => res.json())
+      .then((data) => {
         if (data.avatars) {
           setAvatars(data.avatars);
         }
       })
       .catch(console.error);
+  }, [data]);
+
+  // Sync when SSR posts change
+  useEffect(() => {
+    setData(posts);
+    setOffset(posts.length);
+    setHasMore(true);
   }, [posts]);
+
+  const fetchPosts = async (newOffset: number, replace = false) => {
+    const limit = 20;
+    const url = `/api/markets/${marketId}/posts?limit=${limit}&offset=${newOffset}`;
+    const res = await fetch(url);
+    if (!res.ok) return;
+    const json = await res.json();
+    const fetched: Post[] = json.posts || [];
+    if (replace) {
+      setData(fetched);
+      setOffset(fetched.length);
+      setHasMore(fetched.length >= limit);
+    } else {
+      setData((prev) => [...prev, ...fetched]);
+      setOffset((prev) => prev + fetched.length);
+      if (fetched.length < limit) setHasMore(false);
+    }
+  };
+
+  const handleRefresh = async () => {
+    setLoading(true);
+    try {
+      await fetchPosts(0, true);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLoadMore = async () => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    try {
+      await fetchPosts(offset, false);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   // Generate avatar for an author
   const generateAvatar = async (authorId: string, sampleTweet?: string) => {
@@ -177,11 +227,11 @@ export function PostList({ posts, emptyMessage = "No curated posts yet." }: Prop
     }
   };
 
-  if (!posts.length) {
+  if (!data.length) {
     return <p className="text-sm text-muted-foreground">{emptyMessage}</p>;
   }
 
-  const sortedPosts = [...posts].sort((a, b) => {
+  const sortedPosts = [...data].sort((a, b) => {
     if (filter === "latest") {
       return new Date(b.scored_at).getTime() - new Date(a.scored_at).getTime();
     }
@@ -207,6 +257,10 @@ export function PostList({ posts, emptyMessage = "No curated posts yet." }: Prop
           onClick={() => setFilter("latest")}
         >
           Latest
+        </Button>
+        <div className="flex-1" />
+        <Button variant="ghost" size="sm" onClick={handleRefresh} disabled={loading}>
+          {loading ? "Refreshing..." : "Refresh"}
         </Button>
       </div>
 
@@ -360,6 +414,13 @@ export function PostList({ posts, emptyMessage = "No curated posts yet." }: Prop
           );
         })}
       </div>
+      {hasMore && (
+        <div className="flex justify-center">
+          <Button variant="ghost" size="sm" onClick={handleLoadMore} disabled={loadingMore}>
+            {loadingMore ? "Loading..." : "Load more"}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

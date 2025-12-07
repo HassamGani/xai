@@ -1,3 +1,15 @@
+/**
+ * Probability Engine V1
+ * 
+ * Core probability computation for prediction markets.
+ * See packages/shared/40-probability-engine for algorithm details.
+ * 
+ * ML Integration:
+ * - When ML_MODE is enabled, the engine can use ML-corrected probabilities
+ * - The ML service learns from resolved markets to improve predictions
+ * - See packages/shared/src/ml/ for the ML client
+ */
+
 const EPS = 1e-12;
 const LN2 = Math.log(2);
 
@@ -203,5 +215,128 @@ export function computeProbabilitiesV1(args: {
     algorithm: "evidence-softmax-v1",
     notes: { accepted_posts: accepted, Wbatch, beta, temperature: T, floor }
   };
+}
+
+/**
+ * ML-enhanced probability computation
+ * 
+ * This wraps computeProbabilitiesV1 and optionally applies ML corrections
+ * when the ML service is available and returns a valid correction.
+ * 
+ * @param args - Same args as computeProbabilitiesV1, plus ML options
+ * @returns Probabilities with optional ML correction metadata
+ */
+export async function computeProbabilitiesWithML(args: {
+  now_ms: number;
+  outcomes: OutcomeInput[];
+  prev_probabilities?: Record<string, number>;
+  posts: PostInput[];
+  market_id?: string;
+  ml_enabled?: boolean;
+  ml_client?: {
+    predictCorrection: (req: unknown) => Promise<{
+      probabilities_corrected: Record<string, number>;
+      model_version: string;
+      confidence: number;
+    } | null>;
+  };
+}) {
+  // First compute base probabilities using V1 algorithm
+  const baseResult = computeProbabilitiesV1({
+    now_ms: args.now_ms,
+    outcomes: args.outcomes,
+    prev_probabilities: args.prev_probabilities,
+    posts: args.posts,
+  });
+
+  // If ML is not enabled or no client, return base result
+  if (!args.ml_enabled || !args.ml_client || !args.market_id) {
+    return {
+      ...baseResult,
+      ml_applied: false,
+    };
+  }
+
+  // Try to get ML correction
+  try {
+    const { notes } = baseResult;
+    
+    // Prepare ML request
+    const mlRequest = {
+      market_id: args.market_id,
+      current_probabilities: baseResult.probabilities,
+      market_features: {
+        K: args.outcomes.length,
+        duration_days: 0, // Would need to compute from market data
+        avg_posts_per_hour: 0,
+      },
+      recent_summary: {
+        Wbatch: notes.Wbatch,
+        last_hour_delta: 0,
+        top_post_features: args.posts.slice(0, 5).map(p => {
+          const scores = Object.values(p.scores)[0] || { relevance: 0, stance: 0, strength: 0, credibility: 0, confidence: 0 };
+          return {
+            relevance: scores.relevance,
+            stance: scores.stance,
+            strength: scores.strength,
+            credibility: scores.credibility,
+            confidence: scores.confidence || 0,
+            log_followers: Math.log1p(p.author_followers || 0),
+            author_verified: !!p.author_verified,
+          };
+        }),
+      },
+    };
+
+    const correction = await args.ml_client.predictCorrection(mlRequest);
+
+    if (correction && correction.confidence > 0.5) {
+      return {
+        probabilities: correction.probabilities_corrected,
+        algorithm: "evidence-softmax-v1+ml",
+        notes: {
+          ...notes,
+          ml_version: correction.model_version,
+          ml_confidence: correction.confidence,
+          base_probabilities: baseResult.probabilities,
+        },
+        ml_applied: true,
+      };
+    }
+  } catch (error) {
+    // ML failed, fall back to base result
+    console.error("ML correction failed:", error);
+  }
+
+  return {
+    ...baseResult,
+    ml_applied: false,
+  };
+}
+
+/**
+ * Compute expected usefulness of a post (for filtering/ranking)
+ * 
+ * This can be used to pre-filter posts before scoring,
+ * or to rank posts by expected impact.
+ */
+export function computePostUsefulness(post: PostInput, outcome_id: string): number {
+  const scores = post.scores[outcome_id];
+  if (!scores) return 0;
+
+  const { relevance, stance, strength, credibility, confidence = 1 } = scores;
+  
+  // Semantic strength (same as in V1)
+  const semanticStrength = relevance * strength * credibility * confidence;
+  
+  // Stance contribution (absolute value matters for impact)
+  const stanceImpact = Math.abs(stance);
+  
+  // Author quality proxy
+  const followers = post.author_followers || 0;
+  const authorQuality = sigmoid((Math.log1p(followers) - 8) / 1.5);
+  
+  // Combined usefulness score
+  return semanticStrength * stanceImpact * (0.5 + 0.5 * authorQuality);
 }
 
