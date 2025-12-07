@@ -202,6 +202,14 @@ Identify causal relationships and which market movements would cascade.`;
 
     const validated = validationResult.data;
 
+    // Build id->question map for replacing placeholders inside cascade text
+    const idToQuestion: Record<string, string> = {
+      [marketId]: market.question
+    };
+    for (const m of otherMarkets) {
+      idToQuestion[m.id] = m.question;
+    }
+
     // Enrich related markets with question text
     const enrichedRelatedMarkets = validated.related_markets.map((rm) => {
       const marketInfo = otherMarkets.find((m) => m.id === rm.market_id);
@@ -211,9 +219,20 @@ Identify causal relationships and which market movements would cascade.`;
       };
     });
 
+    // Replace any raw market IDs in cascade scenarios with human-readable questions
+    const cascadesWithNames = validated.cascade_scenarios.map((scenario) => {
+      let text = scenario;
+      for (const [id, question] of Object.entries(idToQuestion)) {
+        if (text.includes(id)) {
+          text = text.replace(new RegExp(id, "g"), `"${question}"`);
+        }
+      }
+      return text;
+    });
+
     return NextResponse.json({
       related_markets: enrichedRelatedMarkets,
-      cascade_scenarios: validated.cascade_scenarios,
+      cascade_scenarios: cascadesWithNames,
       generated_at: new Date().toISOString(),
       market_id: marketId
     });
