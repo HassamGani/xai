@@ -13,8 +13,14 @@ export async function DELETE(
 
   const { id } = paramsSchema.parse(params);
 
-  const { error } = await supabase.from("experiment_markets").delete().eq("id", id);
+  const { data, error } = await supabase
+    .from("experiment_markets")
+    .delete()
+    .eq("id", id)
+    .select("id");
+
   if (error) return NextResponse.json({ error: "Failed to delete", details: error.message }, { status: 500 });
+  if (!data || data.length === 0) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   return NextResponse.json({ ok: true });
 }
