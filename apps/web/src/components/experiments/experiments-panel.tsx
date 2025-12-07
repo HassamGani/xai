@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Trash2 } from "lucide-react";
 
 export type Experiment = {
   id: string;
@@ -32,6 +33,7 @@ export function ExperimentsPanel({ experiments: initial }: Props) {
   const [runLoading, setRunLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [listLoading, setListLoading] = useState(false);
+  const [deleting, setDeleting] = useState<string | null>(null);
 
   const createExperiment = async () => {
     setLoading(true);
@@ -90,6 +92,22 @@ export function ExperimentsPanel({ experiments: initial }: Props) {
       setError(e.message || "Failed to run experiment");
     } finally {
       setRunLoading(null);
+    }
+  };
+
+  const deleteExperiment = async (id: string) => {
+    if (!confirm("Delete this experiment? This will remove runs and snapshots.")) return;
+    setDeleting(id);
+    setError(null);
+    try {
+      const res = await fetch(`/api/experiments/${id}/delete`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || data.details || "Failed to delete");
+      setExperiments((prev) => prev.filter((e) => e.id !== id));
+    } catch (e: any) {
+      setError(e.message || "Failed to delete");
+    } finally {
+      setDeleting(null);
     }
   };
 
@@ -153,13 +171,25 @@ export function ExperimentsPanel({ experiments: initial }: Props) {
                     </p>
                   )}
                 </div>
-                <Button
-                  size="sm"
-                  onClick={() => runExperiment(exp.id)}
-                  disabled={runLoading === exp.id}
-                >
-                  {runLoading === exp.id ? "Running..." : "Run"}
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    onClick={() => runExperiment(exp.id)}
+                    disabled={runLoading === exp.id}
+                  >
+                    {runLoading === exp.id ? "Running..." : "Run"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => deleteExperiment(exp.id)}
+                    disabled={deleting === exp.id}
+                    className="text-destructive hover:text-destructive"
+                  >
+                    <Trash2 className="w-4 h-4 mr-1" />
+                    {deleting === exp.id ? "Deleting..." : "Delete"}
+                  </Button>
+                </div>
               </div>
               <div className="mt-3 flex items-center gap-3 text-xs">
                 <Link
