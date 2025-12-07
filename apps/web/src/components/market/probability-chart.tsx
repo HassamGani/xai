@@ -57,8 +57,7 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
       // lightweight-charts v5 uses addSeries; some builds may still expose addLineSeries. Use whichever exists.
       const line: ISeriesApi<"Line"> =
         (chart as any).addLineSeries?.(opts) ??
-        (chart as any).addSeries?.({ type: "Line" }) ??
-        chart.addSeries?.({ type: "Line" });
+        (chart as any).addSeries?.({ type: "Line" });
       line.applyOptions(opts);
       line.setData(s.data);
       seriesRefs.current.set(s.id, line);
