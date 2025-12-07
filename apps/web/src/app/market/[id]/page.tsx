@@ -8,6 +8,7 @@ import { ProbabilityChart } from "@/components/market/probability-chart";
 import { PostList } from "@/components/market/post-list";
 import { ResolutionBanner } from "@/components/market/resolution-banner";
 import { MarketInfo } from "@/components/market/market-info";
+import { GrokAnalysis } from "@/components/market/grok-analysis";
 import { Button } from "@/components/ui/button";
 
 type Props = {
@@ -147,6 +148,12 @@ export default async function MarketPage({ params }: Props) {
       <div className="space-y-3">
         <h2 className="text-lg font-semibold">Probability over time</h2>
         <ProbabilityChart series={chartSeries} />
+      </div>
+
+      {/* Grok Analysis */}
+      <div className="space-y-3">
+        <h2 className="text-lg font-semibold">AI Analysis</h2>
+        <GrokAnalysis marketId={marketId} />
       </div>
 
       <div className="space-y-3">
