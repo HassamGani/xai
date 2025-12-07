@@ -105,7 +105,7 @@ export async function POST(
           {
             role: "system",
             content:
-              "You generate X search queries for backtesting resolved questions. Return strict JSON only."
+              "You generate X/Twitter search queries for backtesting resolved prediction questions. You must provide a time window that captures the FULL period when this topic was being discussed - start from when it became relevant (e.g., campaign announcements, primaries) until resolution. Return strict JSON only."
           },
           {
             role: "user",
@@ -114,16 +114,21 @@ Outcomes: ${(exp.outcomes || []).map((o: any) => o.label).join(", ")}
 Resolved outcome: ${exp.resolution_outcome || "unknown"}
 Resolved at: ${exp.resolved_at || "unknown"}
 
+IMPORTANT: 
+- start_time should be when this topic FIRST became relevant (e.g., for a 2016 election, start from early 2015 when campaigns began)
+- end_time should be when it was resolved
+- query should find tweets discussing predictions/opinions about who will win
+
 Return JSON ONLY:
 {
-  "query": "x api search query string",
-  "start_time": "ISO string or null",
-  "end_time": "ISO string or null"
+  "query": "x api search query string (keywords about the prediction)",
+  "start_time": "ISO string - when topic became relevant",
+  "end_time": "ISO string - resolution date"
 }`
           }
         ],
         temperature: 0.2,
-        max_tokens: 300,
+        max_tokens: 400,
         search: true
       })
     });
