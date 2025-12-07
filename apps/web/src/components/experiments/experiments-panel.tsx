@@ -155,7 +155,22 @@ export function ExperimentsPanel({ experiments: initial }: Props) {
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="space-y-1">
-                  <h4 className="font-semibold text-foreground">{exp.question}</h4>
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-semibold text-foreground">{exp.question}</h4>
+                    {exp.last_run?.status && (
+                      <span
+                        className={`text-[10px] px-2 py-0.5 rounded-full ${
+                          exp.last_run.status === "running"
+                            ? "bg-amber-500/15 text-amber-600"
+                            : exp.last_run.status === "failed"
+                              ? "bg-rose-500/15 text-rose-600"
+                              : "bg-emerald-500/15 text-emerald-600"
+                        }`}
+                      >
+                        {exp.last_run.status}
+                      </span>
+                    )}
+                  </div>
                   {exp.normalized_question && (
                     <p className="text-xs text-muted-foreground">{exp.normalized_question}</p>
                   )}

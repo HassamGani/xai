@@ -46,6 +46,8 @@ export function ExperimentDetailClient({ experiment, lastRun, snapshots: initial
   const [runInfo, setRunInfo] = useState(lastRun);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [posts, setPosts] = useState<any[]>([]);
+  const [postsLoading, setPostsLoading] = useState(false);
 
   const fetchDetail = async () => {
     setLoading(true);
@@ -56,6 +58,14 @@ export function ExperimentDetailClient({ experiment, lastRun, snapshots: initial
       if (!res.ok) throw new Error(data.error || data.details || "Failed to load");
       setSnapshots(data.snapshots || []);
       setRunInfo(data.last_run || null);
+      // fetch posts
+      setPostsLoading(true);
+      const postsRes = await fetch(`/api/experiments/${experiment.id}/posts?limit=20`);
+      const postsJson = await postsRes.json();
+      if (postsRes.ok && postsJson.posts) {
+        setPosts(postsJson.posts);
+      }
+      setPostsLoading(false);
     } catch (e: any) {
       setError(e.message || "Failed to load");
     } finally {
@@ -103,6 +113,24 @@ export function ExperimentDetailClient({ experiment, lastRun, snapshots: initial
       ) : (
         <ProbabilityChart series={series} height={320} />
       )}
+      <div className="mt-4 space-y-2">
+        <h4 className="text-sm font-semibold">Recent posts (sample)</h4>
+        {postsLoading && <p className="text-xs text-muted-foreground">Loading posts...</p>}
+        {!postsLoading && posts.length === 0 && (
+          <p className="text-xs text-muted-foreground">No posts stored for this experiment.</p>
+        )}
+        <div className="space-y-2">
+          {posts.map((p) => (
+            <div key={p.id} className="rounded-lg border border-border bg-card/60 p-3">
+              <div className="text-xs text-muted-foreground mb-1">
+                @{p.author_username || p.author_id || "unknown"} •{" "}
+                {p.post_created_at ? new Date(p.post_created_at).toLocaleString() : ""}
+              </div>
+              <p className="text-sm text-foreground whitespace-pre-wrap">{p.text}</p>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
