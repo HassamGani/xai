@@ -5,14 +5,15 @@ import {
   createChart,
   ColorType,
   type ISeriesApi,
-  type LineData
+  type LineData,
+  type Time
 } from "lightweight-charts";
 
 type Series = {
   id: string;
   label: string;
   color: string;
-  data: LineData[];
+  data: LineData<Time>[];
 };
 
 type Props = {
