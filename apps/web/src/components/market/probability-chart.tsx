@@ -51,6 +51,17 @@ const formatLocalTime = (tsSeconds: number) => {
   }).format(new Date(tsSeconds * 1000));
 };
 
+// Lightweight-charts can pass time as number or business day object; normalize to epoch seconds
+const toSeconds = (ts: any): number => {
+  if (typeof ts === "number") return ts;
+  if (ts?.timestamp) return Number(ts.timestamp);
+  // Fallback: build from y/m/d if provided
+  if (typeof ts === "object" && ts.year && ts.month && ts.day) {
+    return Math.floor(new Date(ts.year, ts.month - 1, ts.day).getTime() / 1000);
+  }
+  return Number(ts) || 0;
+};
+
 type TooltipItem = {
   id: string;
   y: number;
@@ -153,12 +164,14 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
           timeScale: {
             borderColor: chartColors.gridLines,
             timeVisible: true,
-            secondsVisible: false
+            secondsVisible: false,
+            tickMarkFormatter: (t: any) => formatLocalTime(toSeconds(t))
           },
           localization: {
+            priceFormatter: (p: number) => `${(p * 100).toFixed(1)}%`,
             timeFormatter: (ts: number | { timestamp: number }) => {
-              const val = typeof ts === "number" ? ts : (ts as any)?.timestamp ?? (ts as any);
-              return formatLocalTime(Number(val));
+              const val = toSeconds(ts);
+              return formatLocalTime(val);
             }
           },
           crosshair: {
