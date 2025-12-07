@@ -81,11 +81,11 @@ export function ExperimentsPanel({ experiments: initial }: Props) {
   }, []);
 
   const deleteExperiment = async (id: string) => {
-    if (!confirm("Delete this experiment? This will remove runs and snapshots.")) return;
+    if (!confirm("Delete this experiment? This will remove all related data.")) return;
     setDeleting(id);
     setError(null);
     try {
-      const res = await fetch(`/api/experiments/${id}/delete`, { method: "DELETE" });
+      const res = await fetch(`/api/experiments/${id}/delete`, { method: "POST" });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || data.details || "Failed to delete");
       // Refresh from server to ensure consistency

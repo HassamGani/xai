@@ -1,44 +1,52 @@
-import { NextResponse } from "next/server";
-import { z } from "zod";
+import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
+import { revalidatePath } from "next/cache";
 
-const paramsSchema = z.object({ id: z.string().uuid() });
-
-export async function DELETE(
-  _req: Request,
-  { params }: { params: { id: string } }
+/**
+ * Delete an experiment and all related data.
+ * Uses POST method like market delete for consistency.
+ */
+export async function POST(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
+
   const supabase = getSupabaseAdmin();
-  if (!supabase) return NextResponse.json({ error: "Database not configured" }, { status: 503 });
-
-  const { id } = paramsSchema.parse(params);
-
-  // First check if experiment exists
-  const { data: existing } = await supabase
-    .from("experiment_markets")
-    .select("id")
-    .eq("id", id)
-    .single();
-
-  if (!existing) {
-    return NextResponse.json({ error: "Experiment not found" }, { status: 404 });
+  if (!supabase) {
+    return NextResponse.json({ error: "Database not configured" }, { status: 503 });
   }
 
-  // Delete related data first (cascade should handle this, but be explicit)
-  await supabase.from("experiment_posts").delete().eq("experiment_id", id);
-  await supabase.from("experiment_snapshots").delete().eq("experiment_id", id);
-  await supabase.from("experiment_runs").delete().eq("experiment_id", id);
+  try {
+    // Delete related rows in correct order (children first)
+    const tables = [
+      { table: "experiment_posts", column: "experiment_id" },
+      { table: "experiment_snapshots", column: "experiment_id" },
+      { table: "experiment_runs", column: "experiment_id" },
+      { table: "experiment_markets", column: "id" }
+    ];
 
-  // Delete the experiment
-  const { error } = await supabase
-    .from("experiment_markets")
-    .delete()
-    .eq("id", id);
+    for (const { table, column } of tables) {
+      const { error } = await supabase.from(table).delete().eq(column, id);
+      if (error) {
+        console.error(`Failed to delete from ${table}:`, error);
+      }
+    }
 
-  if (error) {
-    return NextResponse.json({ error: "Failed to delete", details: error.message }, { status: 500 });
+    revalidatePath("/experiments");
+    revalidatePath(`/experiments/${id}`);
+
+    return NextResponse.json({ success: true, deleted: id });
+  } catch (err) {
+    console.error("Delete experiment error:", err);
+    return NextResponse.json({ error: "Failed to delete experiment" }, { status: 500 });
   }
-
-  return NextResponse.json({ ok: true, deleted: id });
 }
 
+// Also support DELETE method for backwards compatibility
+export async function DELETE(
+  request: NextRequest,
+  context: { params: Promise<{ id: string }> }
+) {
+  return POST(request, context);
+}
