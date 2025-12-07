@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { ProbabilityChart } from "@/components/market/probability-chart";
 import { OutcomeCards } from "@/components/market/outcome-cards";
 import { ExperimentPosts } from "@/components/experiments/experiment-posts";
+import { Button } from "@/components/ui/button";
 
 type Snapshot = {
   timestamp: string;
