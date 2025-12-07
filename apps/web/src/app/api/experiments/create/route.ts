@@ -9,6 +9,12 @@ const bodySchema = z.object({
 });
 
 export async function POST(request: Request) {
+  // DISABLED: Experiments API usage is deactivated to save API costs
+  return NextResponse.json({ 
+    error: "Experiments are temporarily disabled", 
+    message: "API usage for experiments has been deactivated" 
+  }, { status: 503 });
+
   try {
     const apiKey = process.env.GROK_API_KEY;
     if (!apiKey) {

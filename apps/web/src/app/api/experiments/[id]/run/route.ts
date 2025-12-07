@@ -57,6 +57,12 @@ export async function POST(
   request: Request,
   { params }: { params: { id: string } }
 ) {
+  // DISABLED: Experiments API usage is deactivated to save API costs
+  return NextResponse.json({ 
+    error: "Experiments are temporarily disabled", 
+    message: "API usage for experiments has been deactivated" 
+  }, { status: 503 });
+
   let runId: string | null = null;
   try {
     const apiKey = process.env.GROK_API_KEY;
