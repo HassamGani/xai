@@ -2,6 +2,8 @@ export const dynamic = "force-dynamic";
 
 import { listMarkets } from "@/lib/markets";
 import { MarketList } from "@/components/market/market-list";
+import { QaPanel } from "@/components/qa/qa-panel";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default async function HomePage() {
   const markets = await listMarkets();
@@ -69,20 +71,37 @@ export default async function HomePage() {
         </div>
       </div>
 
-      {/* Markets Section */}
-      <div id="markets" className="space-y-2">
-        <h2 className="text-lg font-semibold">Markets</h2>
-        <p className="text-sm text-muted-foreground">
-          Probabilities derived from X posts scored by Grok
-        </p>
-        {supabaseMissing && (
-          <p className="text-xs text-destructive">
-            Database not configured or no markets found
-          </p>
-        )}
-      </div>
+      <Tabs defaultValue="markets" className="space-y-4">
+        <TabsList className="bg-muted/60">
+          <TabsTrigger value="markets">Markets</TabsTrigger>
+          <TabsTrigger value="ask">Ask Grok</TabsTrigger>
+        </TabsList>
 
-      <MarketList markets={markets} />
+        <TabsContent value="markets" className="space-y-3" id="markets">
+          <div className="space-y-2">
+            <h2 className="text-lg font-semibold">Markets</h2>
+            <p className="text-sm text-muted-foreground">
+              Probabilities derived from X posts scored by Grok
+            </p>
+            {supabaseMissing && (
+              <p className="text-xs text-destructive">
+                Database not configured or no markets found
+              </p>
+            )}
+          </div>
+          <MarketList markets={markets} />
+        </TabsContent>
+
+        <TabsContent value="ask" className="space-y-3">
+          <div className="space-y-2">
+            <h2 className="text-lg font-semibold">Ask Grok about the markets</h2>
+            <p className="text-sm text-muted-foreground">
+              Natural language queries for movers, drivers, and correlations.
+            </p>
+          </div>
+          <QaPanel compact />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
