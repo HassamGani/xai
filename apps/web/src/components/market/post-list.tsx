@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 
 type Post = {
   id: string;
+  x_post_id?: string | null;
   text?: string | null;
   author_id?: string | null;
   author_followers?: number | null;
@@ -257,22 +258,34 @@ export function PostList({ posts, emptyMessage = "No curated posts yet." }: Prop
                 )}
 
                 {/* Footer Stats */}
-                <div className="mt-3 flex items-center gap-4 text-muted-foreground">
-                  {p.author_followers != null && (
-                    <div className="flex items-center gap-1.5 text-xs">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                <div className="mt-3 flex items-center justify-between">
+                  <div className="flex items-center gap-4 text-muted-foreground">
+                    {p.author_followers != null && (
+                      <div className="flex items-center gap-1.5 text-xs">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                        </svg>
+                        <span>{formatFollowers(p.author_followers)} followers</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* View on X button */}
+                  {p.x_post_id && p.author_id && (
+                    <a
+                      href={`https://x.com/${p.author_id}/status/${p.x_post_id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                    >
+                      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
                       </svg>
-                      <span>{formatFollowers(p.author_followers)} followers</span>
-                    </div>
-                  )}
-                  {p.summary && p.summary !== p.text?.slice(0, 80) && (
-                    <div className="flex items-center gap-1.5 text-xs">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      <span>View on X</span>
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                       </svg>
-                      <span className="truncate max-w-[200px]">{p.summary}</span>
-                    </div>
+                    </a>
                   )}
                 </div>
               </div>

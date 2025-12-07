@@ -68,6 +68,7 @@ export default async function MarketPage({ params }: Props) {
 
   const displayPosts = posts.map((p) => ({
     id: p.scored.id,
+    x_post_id: p.raw?.x_post_id,
     text: p.raw?.text,
     author_id: p.raw?.author_id,
     author_followers: p.raw?.author_followers,
