@@ -47,14 +47,14 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
     chartRef.current = chart;
 
     series.forEach((s) => {
-      const line = chart.addSeries({
-        type: "Line",
+      const line = chart.addSeries({ type: "Line" }) as ISeriesApi<"Line">;
+      line.applyOptions({
+        color: s.color,
         lineWidth: 2,
         priceFormat: { type: "price", minMove: 0.001 },
         lastValueVisible: true,
         title: s.label
-      }) as ISeriesApi<"Line">;
-      line.applyOptions({ color: s.color });
+      });
       line.setData(s.data);
       seriesRefs.current.set(s.id, line);
     });
