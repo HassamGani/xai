@@ -40,9 +40,12 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
   const [mounted, setMounted] = useState(false);
   const [timeRange, setTimeRange] = useState<TimeRange>("all");
   
-  // Single source of truth for tooltips to avoid duplication
+  // Single source of truth for tooltips
   const [activeTooltips, setActiveTooltips] = useState<TooltipData>([]);
   const [isHovering, setIsHovering] = useState(false);
+  
+  // Ref to track if we are in a "cooldown" after hover exit
+  const hoverCooldownRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -67,8 +70,7 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
     if (!chartRef.current || isHovering) return;
     
     const tips: TooltipData = [];
-    const containerWidth = containerRef.current?.clientWidth ?? 0;
-
+    
     filteredSeries.forEach(s => {
       if (s.data.length === 0) return;
       
@@ -145,12 +147,19 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
     if (!p.time || !p.point || !p.seriesData || !chartRef.current) {
       if (isHovering) {
         setIsHovering(false);
-        // We will trigger updateStaticLabels via useEffect when isHovering changes
+        // Small delay to prevent flickering if mouse briefly leaves
+        if (hoverCooldownRef.current) clearTimeout(hoverCooldownRef.current);
+        hoverCooldownRef.current = setTimeout(() => {
+           updateStaticLabels();
+        }, 50);
       }
       return;
     }
 
-    if (!isHovering) setIsHovering(true);
+    if (!isHovering) {
+       setIsHovering(true);
+       if (hoverCooldownRef.current) clearTimeout(hoverCooldownRef.current);
+    }
 
     const tips: TooltipData = [];
     
@@ -177,16 +186,15 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
 
     applyCollisionDetection(tips, (containerRef.current?.clientHeight ?? height));
     setActiveTooltips(tips);
-  }, [filteredSeries, height, isHovering]);
+  }, [filteredSeries, height, isHovering, updateStaticLabels]);
 
-  // Update static labels when not hovering or when data/layout changes
+  // Handle updates when static
   useEffect(() => {
     if (!isHovering) {
-      // Small timeout to ensure chart has rendered new layout
       const timer = requestAnimationFrame(() => updateStaticLabels());
       return () => cancelAnimationFrame(timer);
     }
-  }, [isHovering, updateStaticLabels]);
+  }, [isHovering, updateStaticLabels]); // Trigger on isHovering change -> false
 
   useEffect(() => {
     if (!mounted || !containerRef.current) return;
@@ -272,7 +280,7 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
               color: s.color,
               lineWidth: 2,
               title: s.label,
-              lastValueVisible: false, // Hide built-in axis labels
+              lastValueVisible: false,
               priceLineVisible: false,
               crosshairMarkerVisible: true,
               crosshairMarkerRadius: 4,
@@ -310,7 +318,6 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
           ((chart as { timeScale: Function }).timeScale() as { fitContent: Function }).fitContent();
         }
 
-        // Subscribe to time range changes to update static labels
         if (chart && typeof (chart as Record<string, unknown>).timeScale === "function") {
             const timeScale = (chart as any).timeScale();
             if (timeScale && typeof timeScale.subscribeVisibleLogicalRangeChange === 'function') {
@@ -335,7 +342,6 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
         cleanupFn = () => {
           window.removeEventListener("resize", handleResize);
           if (chartRef.current) {
-            // cleanup
             if (typeof (chartRef.current as any).remove === "function") {
               try { (chartRef.current as any).remove(); } catch (e) {}
             }
@@ -344,7 +350,6 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
           seriesMapRef.current.clear();
         };
         
-        // Initial label update
         setTimeout(() => updateStaticLabels(), 100);
 
       } catch (err) {
@@ -358,7 +363,7 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
     return () => {
       if (cleanupFn) cleanupFn();
     };
-  }, [mounted, height, filteredSeries, timeRange, handleCrosshairMove]); // Re-init on data change
+  }, [mounted, height, filteredSeries, timeRange, handleCrosshairMove]);
 
   if (!mounted) {
     return <div className="w-full bg-white/5 rounded animate-pulse" style={{ height: height + 48 }} />;
@@ -392,16 +397,6 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
             </button>
           ))}
         </div>
-
-        {/* Legend - Just Colors & Labels */}
-        <div className="flex items-center gap-4 text-sm">
-          {filteredSeries.map((s) => (
-            <div key={s.id} className="flex items-center gap-2">
-              <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: s.color }} />
-              <span className="text-muted-foreground">{s.label}</span>
-            </div>
-          ))}
-        </div>
       </div>
 
       {/* Chart container */}
@@ -414,7 +409,6 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
             key={tip.id}
             className="absolute pointer-events-none flex items-center gap-2 transform -translate-y-1/2 z-10 transition-all duration-150 ease-out"
             style={{
-              // If x is null, align right. Else align to x.
               left: tip.x !== null ? tip.x + 10 : undefined,
               right: tip.x === null ? 10 : undefined,
               top: tip.y,
