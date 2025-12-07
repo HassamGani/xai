@@ -66,7 +66,7 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
         });
         chartRef.current = chart;
 
-        const chartAny = chart as Record<string, unknown>;
+        const chartAny = chart as unknown as Record<string, unknown>;
 
         series.forEach((s) => {
           // Filter and sort data - must be monotonically increasing time
