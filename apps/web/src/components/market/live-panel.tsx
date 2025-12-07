@@ -78,7 +78,11 @@ export function LivePanel({ marketId, outcomes, state, snapshots, winningOutcome
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/markets/${marketId}/state?t=${Date.now()}`, { cache: "no-store" });
+      const res = await fetch(`/api/markets/${marketId}/state?t=${Date.now()}`, {
+        cache: "no-store",
+        headers: { "x-no-cache": Date.now().toString() },
+        next: { revalidate: 0 }
+      });
       if (!res.ok) {
         setError("Failed to refresh");
         return;
@@ -123,6 +127,9 @@ export function LivePanel({ marketId, outcomes, state, snapshots, winningOutcome
           );
         })()}
       </div>
+      <p className="text-xs text-muted-foreground">
+        Snapshots: {data.snapshots?.length ?? 0}
+      </p>
       {error && <p className="text-xs text-destructive">{error}</p>}
       <OutcomeCards
         outcomes={outcomeProbs}
