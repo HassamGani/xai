@@ -14,6 +14,7 @@ import { DeleteMarketButton } from "@/components/market/delete-market-button";
 import { AddTickerForm } from "@/components/market/add-ticker-form";
 import { RemoveTickerButton } from "@/components/market/remove-ticker-button";
 import { LivePanel } from "@/components/market/live-panel";
+import { listMarkets, type MarketRow } from "@/lib/markets";
 
 type Props = {
   params: { id: string };
@@ -88,6 +89,10 @@ export default async function MarketPage({ params }: Props) {
     relevance_score: (p.scored.scores as { relevance?: number } | null)?.relevance ?? 0
   }));
 
+  // Related markets (simple keyword overlap)
+  const allMarkets = await listMarkets();
+  const related = computeRelated(market, allMarkets, 4);
+
   // Find winning outcome label if resolved
   const winningOutcome = market.resolved_outcome_id 
     ? outcomes.find((o) => o.id === market.resolved_outcome_id)
@@ -154,6 +159,33 @@ export default async function MarketPage({ params }: Props) {
         winningOutcomeId={winningOutcome?.id}
       />
 
+      {related.length > 0 && (
+        <div className="space-y-2">
+          <h2 className="text-lg font-semibold">Related markets</h2>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {related.map((m) => (
+              <Link key={m.id} href={`/market/${m.id}`} className="group">
+                <Button variant="ghost" className="w-full justify-start h-auto py-3 px-4 border border-border text-left hover:bg-accent/60">
+                  <div className="flex flex-col items-start gap-1">
+                    <span className="text-sm font-medium group-hover:text-primary transition-colors line-clamp-2">
+                      {m.question}
+                    </span>
+                    {m.normalized_question && (
+                      <span className="text-xs text-muted-foreground line-clamp-1">
+                        {m.normalized_question}
+                      </span>
+                    )}
+                    <span className="text-xs text-muted-foreground">
+                      {new Date(m.created_at).toLocaleDateString()} · {m.total_posts_processed ?? 0} posts
+                    </span>
+                  </div>
+                </Button>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
       {showDevDelete && (
         <div className="border border-destructive/30 rounded-lg p-4 space-y-3">
           <p className="text-sm font-medium text-destructive">Developer-only controls</p>
@@ -193,4 +225,24 @@ export default async function MarketPage({ params }: Props) {
       </div>
     </div>
   );
+}
+
+function computeRelated(current: MarketRow | null, markets: MarketRow[], limit: number): MarketRow[] {
+  if (!current) return [];
+  const baseText = `${current.question} ${current.normalized_question ?? ""}`.toLowerCase();
+  const baseWords = new Set(baseText.split(/\W+/).filter((w) => w.length > 3));
+  const scored: { m: MarketRow; score: number }[] = [];
+
+  for (const m of markets) {
+    if (m.id === current.id) continue;
+    const text = `${m.question} ${m.normalized_question ?? ""}`.toLowerCase();
+    const words = new Set(text.split(/\W+/).filter((w) => w.length > 3));
+    if (words.size === 0 || baseWords.size === 0) continue;
+    const overlap = [...words].filter((w) => baseWords.has(w)).length;
+    const union = new Set([...words, ...baseWords]).size;
+    const score = overlap / union;
+    if (score > 0) scored.push({ m, score });
+  }
+
+  return scored.sort((a, b) => b.score - a.score).slice(0, limit).map((s) => s.m);
 }
