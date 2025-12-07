@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "start": "tsx src/index.ts",
-    "dev": "tsx watch src/index.ts"
+    "dev": "tsx watch src/index.ts",
+    "backfill:usernames": "tsx scripts/backfill-usernames.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0",
