@@ -43,7 +43,7 @@ body {
 }
 
 .glass-strong {
-  @apply border border-white/18 bg-white/8 backdrop-blur-2xl shadow-[0_25px_80px_rgba(0,0,0,0.4)];
+  @apply border border-white/20 bg-white/10 backdrop-blur-2xl shadow-[0_25px_80px_rgba(0,0,0,0.4)];
 }
 
 a {
