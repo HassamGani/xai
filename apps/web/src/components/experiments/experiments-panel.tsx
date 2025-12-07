@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,12 @@ export type Experiment = {
   resolution_outcome: string | null;
   resolved_at: string | null;
   created_at: string;
+  last_run?: {
+    status: string;
+    started_at: string;
+    finished_at: string | null;
+    error?: string | null;
+  } | null;
 };
 
 type Props = {
@@ -25,6 +31,7 @@ export function ExperimentsPanel({ experiments: initial }: Props) {
   const [loading, setLoading] = useState(false);
   const [runLoading, setRunLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [listLoading, setListLoading] = useState(false);
 
   const createExperiment = async () => {
     setLoading(true);
@@ -49,6 +56,29 @@ export function ExperimentsPanel({ experiments: initial }: Props) {
       setLoading(false);
     }
   };
+
+  const refreshList = async () => {
+    setListLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/experiments/list");
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || data.details || "Failed to load experiments");
+      if (data.experiments) {
+        setExperiments(data.experiments);
+      }
+    } catch (e: any) {
+      setError(e.message || "Failed to load experiments");
+    } finally {
+      setListLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!initial || initial.length === 0) {
+      refreshList();
+    }
+  }, []);
 
   const runExperiment = async (id: string) => {
     setRunLoading(id);
@@ -91,7 +121,12 @@ export function ExperimentsPanel({ experiments: initial }: Props) {
       </div>
 
       <div className="space-y-3">
-        <h3 className="text-md font-semibold">Experiments</h3>
+        <div className="flex items-center justify-between">
+          <h3 className="text-md font-semibold">Experiments</h3>
+          <Button variant="ghost" size="sm" onClick={refreshList} disabled={listLoading}>
+            {listLoading ? "Refreshing..." : "Refresh"}
+          </Button>
+        </div>
         {experiments.length === 0 && (
           <p className="text-sm text-muted-foreground">No experiments yet.</p>
         )}
@@ -111,6 +146,14 @@ export function ExperimentsPanel({ experiments: initial }: Props) {
                     Known outcome: {exp.resolution_outcome || "—"} • Resolved at:{" "}
                     {exp.resolved_at ? new Date(exp.resolved_at).toLocaleString() : "—"}
                   </p>
+                  {exp.last_run && (
+                    <p className="text-[11px] text-muted-foreground">
+                      Last run: {exp.last_run.status} • Started{" "}
+                      {new Date(exp.last_run.started_at).toLocaleString()}
+                      {exp.last_run.finished_at ? ` • Finished ${new Date(exp.last_run.finished_at).toLocaleString()}` : ""}
+                      {exp.last_run.error ? ` • Error: ${exp.last_run.error}` : ""}
+                    </p>
+                  )}
                 </div>
                 <Button
                   size="sm"
