@@ -6,6 +6,12 @@ import { useRouter } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
+type Outcome = {
+  id: string;
+  label: string;
+  probability: number;
+};
+
 type Market = {
   id: string;
   question: string;
@@ -13,6 +19,7 @@ type Market = {
   created_at: string;
   total_posts_processed: number | null;
   posts_count?: number | null;
+  outcomes: Outcome[];
 };
 
 type Props = {
@@ -135,27 +142,64 @@ export function MarketList({ markets }: Props) {
 
       {/* Markets grid */}
       <div className="grid gap-3 md:grid-cols-2">
-        {filtered.map((m) => (
-          <Link key={m.id} href={`/market/${m.id}`} className="group">
-            <Card className="h-full transition-colors hover:bg-accent/50">
-              <CardHeader>
-                <CardTitle className="line-clamp-2 group-hover:text-primary transition-colors">
-                  {m.question}
-                </CardTitle>
-                <CardDescription>
-                  {new Date(m.created_at).toLocaleDateString()} · {(m.posts_count ?? m.total_posts_processed ?? 0)} posts
-                </CardDescription>
-              </CardHeader>
-              {m.normalized_question && (
-                <CardContent>
-                  <p className="text-sm text-muted-foreground line-clamp-1">
-                    {m.normalized_question}
-                  </p>
+        {filtered.map((m) => {
+          const hasProbs = m.outcomes.length > 0 && m.outcomes.some(o => o.probability > 0);
+          const leadingOutcome = m.outcomes[0]; // Already sorted by probability desc
+          
+          return (
+            <Link key={m.id} href={`/market/${m.id}`} className="group">
+              <Card className="h-full transition-colors hover:bg-accent/50 relative overflow-hidden">
+                {/* Background probability bar for leading outcome */}
+                {hasProbs && leadingOutcome && (
+                  <div
+                    className="absolute inset-0 bg-primary/5"
+                    style={{ width: `${Math.max(leadingOutcome.probability * 100, 5)}%` }}
+                  />
+                )}
+                <CardHeader className="relative pb-2">
+                  <CardTitle className="line-clamp-2 group-hover:text-primary transition-colors">
+                    {m.question}
+                  </CardTitle>
+                  <CardDescription>
+                    {new Date(m.created_at).toLocaleDateString()} · {(m.posts_count ?? m.total_posts_processed ?? 0)} posts
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="relative pt-0">
+                  {hasProbs ? (
+                    <div className="flex flex-wrap gap-2">
+                      {m.outcomes.slice(0, 3).map((o, idx) => (
+                        <div
+                          key={o.id}
+                          className={`flex items-center gap-1.5 text-sm ${
+                            idx === 0
+                              ? "text-emerald-600 dark:text-emerald-400 font-semibold"
+                              : idx === 1
+                              ? "text-amber-600 dark:text-amber-400"
+                              : "text-muted-foreground"
+                          }`}
+                        >
+                          <span className="truncate max-w-[100px]">{o.label}</span>
+                          <span className="font-mono tabular-nums">
+                            {(o.probability * 100).toFixed(0)}%
+                          </span>
+                        </div>
+                      ))}
+                      {m.outcomes.length > 3 && (
+                        <span className="text-xs text-muted-foreground">
+                          +{m.outcomes.length - 3} more
+                        </span>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground italic">
+                      Awaiting posts...
+                    </p>
+                  )}
                 </CardContent>
-              )}
-            </Card>
-          </Link>
-        ))}
+              </Card>
+            </Link>
+          );
+        })}
       </div>
 
       {/* Create market prompt */}

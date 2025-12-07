@@ -74,7 +74,11 @@ export type RawPostRow = {
   referenced_post_id: string | null;
 };
 
-export async function listMarkets() {
+export type MarketWithProbabilities = MarketRow & {
+  outcomes: Array<{ id: string; label: string; probability: number }>;
+};
+
+export async function listMarkets(): Promise<MarketWithProbabilities[]> {
   // Prefer admin client to avoid any RLS issues when listing markets
   const supabase = getSupabaseAdmin() || getSupabaseServer();
   if (!supabase) return [];
@@ -83,18 +87,63 @@ export async function listMarkets() {
   if (error) throw error;
   const markets = (data ?? []) as MarketRow[];
 
-  // Attach live post counts from raw_posts for accuracy
-  await Promise.all(
+  // Fetch outcomes and market_state for all markets in parallel
+  const marketIds = markets.map((m) => m.id);
+  
+  const [outcomesRes, statesRes] = await Promise.all([
+    supabase.from("outcomes").select("*").in("market_id", marketIds),
+    supabase.from("market_state").select("*").in("market_id", marketIds)
+  ]);
+
+  const outcomesMap = new Map<string, OutcomeRow[]>();
+  (outcomesRes.data ?? []).forEach((o) => {
+    const list = outcomesMap.get(o.market_id) ?? [];
+    list.push(o as OutcomeRow);
+    outcomesMap.set(o.market_id, list);
+  });
+
+  const statesMap = new Map<string, MarketStateRow>();
+  (statesRes.data ?? []).forEach((s) => {
+    statesMap.set(s.market_id, s as MarketStateRow);
+  });
+
+  // Attach live post counts and probabilities
+  const results: MarketWithProbabilities[] = await Promise.all(
     markets.map(async (m) => {
       const { count } = await supabase
         .from("raw_posts")
         .select("*", { count: "exact", head: true })
         .eq("market_id", m.id);
       m.posts_count = count ?? m.total_posts_processed ?? 0;
+
+      const marketOutcomes = outcomesMap.get(m.id) ?? [];
+      const state = statesMap.get(m.id);
+      
+      // Build outcomes with probabilities from market_state or fallback to outcome's current_probability
+      const outcomes = marketOutcomes.map((o) => {
+        let prob = 0;
+        if (state?.probabilities) {
+          // Try to find probability in state.probabilities (keyed by outcome_id or label)
+          prob = state.probabilities[o.outcome_id] ?? state.probabilities[o.label] ?? 0;
+        }
+        if (prob === 0 && o.current_probability != null) {
+          prob = o.current_probability;
+        }
+        return {
+          id: o.id,
+          label: o.label,
+          probability: prob
+        };
+      }).sort((a, b) => b.probability - a.probability);
+
+      return {
+        ...m,
+        outcomes
+      };
     })
   );
 
-  return markets;
+  return results;
 }
 
 export async function getMarket(marketId: string) {
