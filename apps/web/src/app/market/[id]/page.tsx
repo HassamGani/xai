@@ -10,8 +10,6 @@ type Props = {
   params: { id: string };
 };
 
-import { type UTCTimestamp } from "lightweight-charts";
-
 function toSeries(
   snapshots: { timestamp: string; probabilities: Record<string, number> }[],
   outcomes: { id: string; label: string }[]
@@ -22,7 +20,7 @@ function toSeries(
     label: o.label,
     color: palette[idx % palette.length],
     data: snapshots.map((s) => ({
-      time: Math.floor(new Date(s.timestamp).getTime() / 1000) as UTCTimestamp,
+      time: Math.floor(new Date(s.timestamp).getTime() / 1000),
       value: (s.probabilities ?? {})[o.id] ?? 0
     }))
   }));
