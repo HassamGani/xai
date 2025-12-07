@@ -130,42 +130,54 @@ export async function getMarketPosts(marketId: string, limit = 20) {
     .select("*")
     .eq("market_id", marketId)
     .order("scored_at", { ascending: false })
-    .limit(limit * 2); // Fetch extra to account for filtered retweets
+    .limit(limit * 3); // Fetch extra to account for filtered retweets and duplicates
 
   if (scoredRes.error) throw scoredRes.error;
 
   const rawIds = Array.from(new Set((scoredRes.data ?? []).map((p) => p.raw_post_id)));
   
-  // Get raw posts, excluding simple retweets (but including quote retweets)
+  // Get all raw posts (we'll filter in code for more flexibility)
   const rawRes = await supabase
     .from("raw_posts")
     .select("*")
-    .in("id", rawIds)
-    .or("is_retweet.eq.false,is_retweet.is.null,is_quote_retweet.eq.true");
+    .in("id", rawIds);
 
   if (rawRes.error) throw rawRes.error;
 
   const rawMap = new Map<string, RawPostRow>();
   (rawRes.data ?? []).forEach((r) => rawMap.set(r.id, r as RawPostRow));
 
-  // Filter to only include posts that have valid raw posts (not simple retweets)
+  // Track seen x_post_ids to deduplicate
+  const seenPostIds = new Set<string>();
+
+  // Filter posts
   const results = (scoredRes.data ?? [])
     .map((row) => ({
       scored: row as ScoredPostRow,
       raw: rawMap.get((row as ScoredPostRow).raw_post_id) ?? null
     }))
     .filter((item) => {
-      // Include if we have raw post data (it passed the retweet filter)
       if (!item.raw) return false;
       
-      // Double check: exclude simple retweets (is_retweet=true AND is_quote_retweet=false/null)
+      // Deduplicate by x_post_id
+      if (item.raw.x_post_id) {
+        if (seenPostIds.has(item.raw.x_post_id)) return false;
+        seenPostIds.add(item.raw.x_post_id);
+      }
+      
+      // Check if it's a simple retweet via flag
       if (item.raw.is_retweet === true && item.raw.is_quote_retweet !== true) {
+        return false;
+      }
+      
+      // Fallback: check text pattern for "RT @" (for legacy data without flags)
+      if (item.raw.text && item.raw.text.trim().startsWith("RT @")) {
         return false;
       }
       
       return true;
     })
-    .slice(0, limit); // Apply the original limit after filtering
+    .slice(0, limit);
 
   return results;
 }
