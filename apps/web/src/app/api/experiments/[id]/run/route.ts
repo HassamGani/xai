@@ -8,6 +8,51 @@ const X_SEARCH_URL = "https://api.twitter.com/2/tweets/search/all";
 
 const paramsSchema = z.object({ id: z.string().uuid() });
 
+// Helper: derive stance label from per-outcome scores
+function deriveStanceLabel(
+  scores: Record<string, any>,
+  labels: string[]
+): string | null {
+  if (!scores || labels.length === 0) return null;
+  let bestLabel: string | null = null;
+  let maxStance = -2;
+  for (const label of labels) {
+    const s = scores[label];
+    if (!s || typeof s !== "object") continue;
+    const stance = s.stance ?? 0;
+    const strength = s.strength ?? 0;
+    const combined = Math.abs(stance) * strength;
+    if (combined > maxStance) {
+      maxStance = combined;
+      bestLabel = stance >= 0 ? `Pro ${label}` : `Against ${label}`;
+    }
+  }
+  return bestLabel;
+}
+
+// Helper: derive credibility label from scores
+function deriveCredibilityLabel(
+  scores: Record<string, any>,
+  labels: string[]
+): string | null {
+  if (!scores || labels.length === 0) return null;
+  let totalCred = 0;
+  let count = 0;
+  for (const label of labels) {
+    const s = scores[label];
+    if (!s || typeof s !== "object") continue;
+    if (typeof s.credibility === "number") {
+      totalCred += s.credibility;
+      count++;
+    }
+  }
+  if (count === 0) return null;
+  const avgCred = totalCred / count;
+  if (avgCred >= 0.7) return "High";
+  if (avgCred <= 0.3) return "Low";
+  return "Medium";
+}
+
 export async function POST(
   request: Request,
   { params }: { params: { id: string } }
@@ -126,13 +171,17 @@ Return JSON ONLY:
       created_at: string;
       public_metrics?: { like_count?: number; retweet_count?: number; reply_count?: number; quote_count?: number };
     }>;
+
+    // Sort posts oldest-first (chronological order like real-time ingestion)
+    posts.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+
     // Cap posts and runtime to avoid timeouts
     const startedAt = Date.now();
     const TIME_BUDGET_MS = 8000;
     const POSTS_LIMIT = 30;
     const limitedPosts = posts.slice(0, POSTS_LIMIT);
     const users = new Map(
-      ((searchJson.includes?.users || []) as Array<{ id: string; username?: string; public_metrics?: { followers_count?: number } }>)
+      ((searchJson.includes?.users || []) as Array<{ id: string; username?: string; profile_image_url?: string; public_metrics?: { followers_count?: number } }>)
         .map((u) => [u.id, u])
     );
 
@@ -268,6 +317,17 @@ Tweet by @${author?.username || post.author_id}:
     // Store posts and snapshots
     const postRows = scoredRows.map((row) => {
       const author = users.get(row.post.author_id);
+      // Compute aggregate relevance score for sorting
+      const outcomesScores = Object.values(row.scores || {}) as Array<{
+        relevance?: number;
+        stance?: number;
+        strength?: number;
+        credibility?: number;
+      }>;
+      const avgRelevance =
+        outcomesScores.length > 0
+          ? outcomesScores.reduce((sum, s) => sum + (s?.relevance ?? 0), 0) / outcomesScores.length
+          : 0;
       return {
         experiment_id: id,
         x_post_id: row.post.id,
@@ -275,10 +335,17 @@ Tweet by @${author?.username || post.author_id}:
         author_id: row.post.author_id,
         author_username: author?.username || null,
         author_followers: author?.public_metrics?.followers_count || null,
+        profile_image_url: author?.profile_image_url || null,
         post_created_at: row.post.created_at,
         metrics: row.post.public_metrics || {},
         scores: row.scores,
-        display_labels: row.display_labels || null
+        display_labels: {
+          ...(row.display_labels || {}),
+          relevance_score: avgRelevance,
+          // Derive stance/credibility labels from scores
+          stance_label: deriveStanceLabel(row.scores, labels),
+          credibility_label: deriveCredibilityLabel(row.scores, labels)
+        }
       };
     });
 
