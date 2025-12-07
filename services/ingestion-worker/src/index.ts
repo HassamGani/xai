@@ -12,8 +12,9 @@ const envSchema = z.object({
 
 const env = envSchema.parse(process.env);
 
-// Simple in-memory cache for author lookups to avoid repeat hits
-const usernameCache = new Map<string, string>();
+// Simple in-memory caches for author lookups to avoid repeat hits
+const userCache = new Map<string, { username: string | null; avatar: string | null }>();
+const avatarWritten = new Set<string>();
 
 // Initialize Supabase client
 const supabase: SupabaseClient = createClient(
@@ -214,7 +215,7 @@ async function processTweet(
     };
   },
   matchingRules: { tag: string }[],
-  expansions?: { users?: Array<{ id: string; username?: string }> }
+  expansions?: { users?: Array<{ id: string; username?: string; profile_image_url?: string }> }
 ): Promise<void> {
   // Extract market IDs from matching rules
   const marketIds = new Set<string>();
@@ -267,12 +268,21 @@ async function processTweet(
     }
 
     // Map author username from expansions (if available)
-    let authorUsername =
-      expansions?.users?.find((u) => u.id === tweet.author_id)?.username ?? null;
+    const userExpansion = expansions?.users?.find((u) => u.id === tweet.author_id);
+    let authorUsername = userExpansion?.username ?? null;
+    let authorAvatarUrl = userExpansion?.profile_image_url ?? null;
 
-    // If expansions didn't include username, fetch once from X and cache
-    if (!authorUsername) {
-      authorUsername = await fetchUsername(tweet.author_id);
+    // If expansions didn't include username/avatar, fetch once from X and cache
+    if (!authorUsername || !authorAvatarUrl) {
+      const profile = await fetchUserProfile(tweet.author_id);
+      authorUsername = authorUsername || profile?.username || null;
+      authorAvatarUrl = authorAvatarUrl || profile?.avatar || null;
+    }
+
+    // Persist avatar URL (from X) into author_avatars so UI can use it immediately
+    if (authorAvatarUrl && !avatarWritten.has(tweet.author_id)) {
+      await upsertAuthorAvatar(tweet.author_id, authorAvatarUrl, tweet.text);
+      avatarWritten.add(tweet.author_id);
     }
 
     // Insert raw post
@@ -433,7 +443,7 @@ async function connectToStream(): Promise<void> {
     "author_id,created_at,public_metrics,referenced_tweets"
   );
   url.searchParams.set("expansions", "author_id,referenced_tweets.id");
-  url.searchParams.set("user.fields", "verified,public_metrics,username,name");
+  url.searchParams.set("user.fields", "verified,public_metrics,username,name,profile_image_url");
 
   log("INFO", "🔌 Connecting to X filtered stream...");
 
@@ -529,29 +539,48 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// Fetch username from X API as a fallback when expansions omit it
-async function fetchUsername(authorId: string): Promise<string | null> {
-  if (usernameCache.has(authorId)) return usernameCache.get(authorId) || null;
+// Fetch username + avatar from X API as a fallback when expansions omit them
+async function fetchUserProfile(authorId: string): Promise<{ username: string | null; avatar: string | null } | null> {
+  if (userCache.has(authorId)) return userCache.get(authorId) || null;
 
   try {
-    const res = await fetch(`${X_API_BASE}/users/${authorId}?user.fields=username`, {
+    const res = await fetch(`${X_API_BASE}/users/${authorId}?user.fields=username,profile_image_url`, {
       headers: { Authorization: `Bearer ${env.X_BEARER_TOKEN}` },
     });
 
     if (!res.ok) {
-      log("WARN", "Failed to fetch username", { authorId, status: res.status });
+      log("WARN", "Failed to fetch user profile", { authorId, status: res.status });
       return null;
     }
 
     const data = await res.json();
     const username = data?.data?.username || null;
-    if (username) {
-      usernameCache.set(authorId, username);
-    }
-    return username;
+    const avatar = data?.data?.profile_image_url || null;
+    const profile = { username, avatar };
+    userCache.set(authorId, profile);
+    return profile;
   } catch (error) {
-    log("WARN", "Username lookup error", { authorId, error: String(error) });
+    log("WARN", "User profile lookup error", { authorId, error: String(error) });
     return null;
+  }
+}
+
+// Upsert avatar into Supabase (author_avatars), storing the URL we got from X
+async function upsertAuthorAvatar(authorId: string, avatarUrl: string, sampleTweet?: string): Promise<void> {
+  try {
+    const { error } = await supabase
+      .from("author_avatars")
+      .upsert({
+        author_id: authorId,
+        avatar_data: avatarUrl,
+        generation_prompt: "X profile image url",
+        sample_tweet: sampleTweet?.slice(0, 500) || null,
+      });
+    if (error) {
+      log("WARN", "Failed to upsert avatar", { authorId, error });
+    }
+  } catch (error) {
+    log("WARN", "Avatar upsert error", { authorId, error: String(error) });
   }
 }
 
