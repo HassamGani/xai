@@ -103,7 +103,7 @@ export default async function MarketPage({ params }: Props) {
       </div>
 
       {/* Resolution Banner (if resolved) */}
-      {isResolved && winningOutcome && (
+      {isResolved && winningOutcome && market.resolved_at && (
         <ResolutionBanner
           winningOutcome={winningOutcome.label}
           resolvedAt={market.resolved_at}
