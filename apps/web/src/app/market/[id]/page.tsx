@@ -80,6 +80,7 @@ export default async function MarketPage({ params }: Props) {
     x_post_id: p.raw?.x_post_id,
     text: p.raw?.text,
     author_id: p.raw?.author_id,
+    author_username: (p.raw as any)?.author_username ?? undefined,
     author_followers: p.raw?.author_followers,
     scored_at: p.scored.scored_at,
     stance_label: p.scored.display_labels?.stance_label,
@@ -148,6 +149,7 @@ export default async function MarketPage({ params }: Props) {
         estimatedResolutionDate={market.estimated_resolution_date}
         resolutionCriteria={market.resolution_criteria}
         totalPostsProcessed={market.total_posts_processed ?? undefined}
+        postsCount={(market as any).posts_count ?? market.total_posts_processed ?? undefined}
         isResolved={isResolved}
       />
 

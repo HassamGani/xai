@@ -7,6 +7,7 @@ export type MarketRow = {
   status: string;
   created_at: string;
   total_posts_processed: number | null;
+  posts_count?: number | null;
   estimated_resolution_date: string | null;
   resolution_criteria: string | null;
   resolved_at: string | null;
@@ -62,6 +63,7 @@ export type RawPostRow = {
   x_post_id: string;
   text: string;
   author_id: string | null;
+  author_username?: string | null;
   author_followers: number | null;
   author_verified: boolean | null;
   metrics: Record<string, number> | null;
@@ -79,7 +81,20 @@ export async function listMarkets() {
   const { data, error } = await supabase.from("markets").select("*").order("created_at", { ascending: false });
 
   if (error) throw error;
-  return (data ?? []) as MarketRow[];
+  const markets = (data ?? []) as MarketRow[];
+
+  // Attach live post counts from raw_posts for accuracy
+  await Promise.all(
+    markets.map(async (m) => {
+      const { count } = await supabase
+        .from("raw_posts")
+        .select("*", { count: "exact", head: true })
+        .eq("market_id", m.id);
+      m.posts_count = count ?? m.total_posts_processed ?? 0;
+    })
+  );
+
+  return markets;
 }
 
 export async function getMarket(marketId: string) {
@@ -113,8 +128,18 @@ export async function getMarket(marketId: string) {
   if (stateRes.error && stateRes.status !== 406) throw stateRes.error;
   if (snapshotsRes.error) throw snapshotsRes.error;
 
+  // Accurate post count from raw_posts
+  const { count: rawCount } = await supabase
+    .from("raw_posts")
+    .select("*", { count: "exact", head: true })
+    .eq("market_id", marketId);
+
   return {
-    market: marketRes.data as MarketRow,
+    market: {
+      ...(marketRes.data as MarketRow),
+      posts_count: rawCount ?? marketRes.data?.total_posts_processed ?? null,
+      total_posts_processed: rawCount ?? marketRes.data?.total_posts_processed ?? null
+    } as MarketRow,
     outcomes: (outcomesRes.data ?? []) as OutcomeRow[],
     state: stateRes.data as MarketStateRow | null,
     snapshots: (snapshotsRes.data ?? []) as ProbabilitySnapshotRow[]
