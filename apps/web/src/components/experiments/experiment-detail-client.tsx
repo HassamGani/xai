@@ -77,12 +77,17 @@ export function ExperimentDetailClient({ experiment, lastRun, snapshots: initial
   };
 
   useEffect(() => {
-    // If running, poll a few times to update status/snapshots
-    if (runInfo?.status === "running") {
+    fetchDetail();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [experiment.id]);
+
+  useEffect(() => {
+    // Poll while running or until we have snapshots
+    if (runInfo?.status === "running" || snapshots.length === 0) {
       const interval = setInterval(fetchDetail, 3000);
       return () => clearInterval(interval);
     }
-  }, [runInfo]);
+  }, [runInfo, snapshots.length]);
 
   const outcomeLabels = (experiment.outcomes || []).map((o) => o.label);
 
