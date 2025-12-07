@@ -16,8 +16,11 @@ export async function POST(
   const suppliedSecret = request.headers.get("x-dev-secret");
   const internalSecret = process.env.INTERNAL_DEV_SECRET;
 
-  if (!internalSecret || suppliedSecret !== internalSecret) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  // Hackathon-friendly: if INTERNAL_DEV_SECRET is not set, allow deletion with confirmation flow
+  if (internalSecret) {
+    if (suppliedSecret !== internalSecret) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
   }
 
   const supabase = getSupabaseAdmin();

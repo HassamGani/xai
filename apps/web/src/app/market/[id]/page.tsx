@@ -12,7 +12,6 @@ import { GrokAnalysis } from "@/components/market/grok-analysis";
 import { Button } from "@/components/ui/button";
 import { DeleteMarketButton } from "@/components/market/delete-market-button";
 import { AddTickerForm } from "@/components/market/add-ticker-form";
-import { DeleteMarketButton } from "@/components/market/delete-market-button";
 
 type Props = {
   params: { id: string };
