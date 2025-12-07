@@ -1,10 +1,12 @@
 export const dynamic = "force-dynamic";
 
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import { getMarket, getMarketPosts } from "@/lib/markets";
 import { OutcomeCards } from "@/components/market/outcome-cards";
 import { ProbabilityChart } from "@/components/market/probability-chart";
 import { PostList } from "@/components/market/post-list";
+import { Button } from "@/components/ui/button";
 
 type Props = {
   params: { id: string };
@@ -82,11 +84,27 @@ export default async function MarketPage({ params }: Props) {
     stance_label: p.scored.display_labels?.stance_label,
     credibility_label: p.scored.display_labels?.credibility_label,
     summary: p.scored.display_labels?.summary,
-    reason: p.scored.display_labels?.reason
+    reason: p.scored.display_labels?.reason,
+    // Add relevance score for sorting
+    relevance_score: p.scored.scores 
+      ? Math.max(...Object.values(p.scored.scores as Record<string, { relevance: number }>).map(s => s.relevance)) 
+      : 0
   }));
 
   return (
     <div className="space-y-6">
+      {/* Back Button */}
+      <div>
+        <Link href="/">
+          <Button variant="ghost" size="sm" className="pl-0 text-muted-foreground hover:text-foreground">
+            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            Back to Markets
+          </Button>
+        </Link>
+      </div>
+
       <div className="space-y-2">
         <p className="text-sm text-muted-foreground">
           Created {new Date(market.created_at).toLocaleString()}
