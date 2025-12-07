@@ -1,9 +1,12 @@
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const fetchCache = "force-no-store";
 
 import { listMarkets } from "@/lib/markets";
 import { MarketList } from "@/components/market/market-list";
 
 export default async function HomePage() {
+  // Force fresh data on every request
   const markets = await listMarkets();
   const supabaseMissing = markets.length === 0;
 

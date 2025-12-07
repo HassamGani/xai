@@ -81,10 +81,23 @@ export type MarketWithProbabilities = MarketRow & {
 export async function listMarkets(): Promise<MarketWithProbabilities[]> {
   // Prefer admin client to avoid any RLS issues when listing markets
   const supabase = getSupabaseAdmin() || getSupabaseServer();
-  if (!supabase) return [];
-  const { data, error } = await supabase.from("markets").select("*").order("created_at", { ascending: false });
-
-  if (error) throw error;
+  if (!supabase) {
+    console.warn("listMarkets: No Supabase client available");
+    return [];
+  }
+  
+  const { data, error } = await supabase
+    .from("markets")
+    .select("*")
+    .order("created_at", { ascending: false });
+  
+  if (error) {
+    console.error("listMarkets error:", error);
+    throw error;
+  }
+  
+  console.log(`listMarkets: Found ${data?.length ?? 0} markets`);
+  
   const markets = (data ?? []) as MarketRow[];
 
   // Fetch outcomes and market_state for all markets in parallel
