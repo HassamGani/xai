@@ -75,9 +75,7 @@ export function ExperimentsPanel({ experiments: initial }: Props) {
   };
 
   useEffect(() => {
-    if (!initial || initial.length === 0) {
-      refreshList();
-    }
+    refreshList();
   }, []);
 
   const runExperiment = async (id: string) => {
