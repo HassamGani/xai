@@ -40,11 +40,9 @@ const CHART_COLORS = {
   }
 };
 
-// Format time in the viewer's local time zone
+// Format time in the viewer's local time zone (time-only)
 const formatLocalTime = (tsSeconds: number) => {
   return new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    day: "numeric",
     hour: "numeric",
     minute: "2-digit",
     timeZoneName: "short"
