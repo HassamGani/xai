@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSupabaseServer } from "@/lib/supabase/server";
+import { getSupabaseAdmin, getSupabaseServer } from "@/lib/supabase/server";
 import { createMarketFromQuestion, checkSemanticSimilarity } from "@/lib/grok";
 import { z } from "zod";
 
@@ -12,7 +12,8 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { question } = AskRequestSchema.parse(body);
 
-    const supabase = getSupabaseServer();
+    // Use admin client for write operations (bypasses RLS)
+    const supabase = getSupabaseAdmin() || getSupabaseServer();
     if (!supabase) {
       return NextResponse.json({ error: "Database not configured" }, { status: 503 });
     }
