@@ -42,8 +42,7 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
       },
       timeScale: {
         borderVisible: false
-      },
-      localization: { percentage: true }
+      }
     });
     chartRef.current = chart;
 
