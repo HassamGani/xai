@@ -9,6 +9,7 @@ import { PostList } from "@/components/market/post-list";
 import { ResolutionBanner } from "@/components/market/resolution-banner";
 import { MarketInfo } from "@/components/market/market-info";
 import { GrokAnalysis } from "@/components/market/grok-analysis";
+import { CorrelationInsights } from "@/components/market/correlation-insights";
 import { Button } from "@/components/ui/button";
 
 type Props = {
@@ -154,6 +155,12 @@ export default async function MarketPage({ params }: Props) {
       <div className="space-y-3">
         <h2 className="text-lg font-semibold">AI Analysis</h2>
         <GrokAnalysis marketId={marketId} />
+      </div>
+
+      {/* Cross-Market Correlations */}
+      <div className="space-y-3">
+        <h2 className="text-lg font-semibold">Related Markets</h2>
+        <CorrelationInsights marketId={marketId} />
       </div>
 
       <div className="space-y-3">
