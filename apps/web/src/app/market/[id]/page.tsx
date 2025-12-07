@@ -91,7 +91,7 @@ export default async function MarketPage({ params }: Props) {
 
   // Related markets (simple keyword overlap)
   const allMarkets = await listMarkets();
-  const related = computeRelated(market, allMarkets, 4);
+  const related = computeRelated(market, allMarkets, 6);
 
   // Find winning outcome label if resolved
   const winningOutcome = market.resolved_outcome_id 
@@ -257,10 +257,10 @@ function computeRelated(current: MarketRow | null, markets: MarketRow[], limit: 
     ]);
     if (tokens.size === 0) continue;
     const overlap = [...tokens].filter((t) => baseTokens.has(t));
-    if (overlap.length < 2) continue; // require meaningful overlap
+    if (overlap.length < 1) continue; // allow at least 1 strong shared token
     const union = new Set([...tokens, ...baseTokens]).size;
     const jaccard = overlap.length / union;
-    if (jaccard >= 0.15) {
+    if (jaccard >= 0.08) {
       scored.push({ m, score: jaccard, overlap: overlap.length });
     }
   }

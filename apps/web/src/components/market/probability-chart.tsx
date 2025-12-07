@@ -40,12 +40,11 @@ const CHART_COLORS = {
   }
 };
 
-// Format time in the viewer's local time zone (time-only)
+// Format time in the viewer's local time zone (time-only, no tz label)
 const formatLocalTime = (tsSeconds: number) => {
   return new Intl.DateTimeFormat(undefined, {
     hour: "numeric",
-    minute: "2-digit",
-    timeZoneName: "short"
+    minute: "2-digit"
   }).format(new Date(tsSeconds * 1000));
 };
 
@@ -157,7 +156,10 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
             vertLines: { color: chartColors.gridLines },
             horzLines: { color: chartColors.gridLines }
           },
-          rightPriceScale: { visible: false },
+          rightPriceScale: {
+            visible: true,
+            borderColor: chartColors.gridLines
+          },
           leftPriceScale: { visible: false },
           timeScale: {
             borderColor: chartColors.gridLines,
