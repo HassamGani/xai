@@ -54,6 +54,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Normalize rule templates to avoid noisy retweets and prefer English
+    const normalizedRuleTemplates = (marketData.x_rule_templates || []).map((tpl: string) => {
+      const hasRetweetFilter = tpl.toLowerCase().includes("is:retweet");
+      const hasLang = tpl.toLowerCase().includes("lang:");
+      return `${tpl}${hasRetweetFilter ? "" : " -is:retweet"}${hasLang ? "" : " lang:en"}`.trim();
+    });
+
     // Step 4: Insert market with resolution fields
     const { data: market, error: marketError } = await supabase
       .from("markets")
@@ -61,7 +68,7 @@ export async function POST(request: NextRequest) {
         question: question,
         normalized_question: marketData.normalized_question,
         status: "active",
-        x_rule_templates: marketData.x_rule_templates,
+        x_rule_templates: normalizedRuleTemplates,
         total_posts_processed: 0,
         estimated_resolution_date: marketData.estimated_resolution_date,
         resolution_criteria: marketData.resolution_criteria
@@ -115,8 +122,8 @@ export async function POST(request: NextRequest) {
     let streamActivated = false;
     try {
       const X_BEARER_TOKEN = process.env.X_BEARER_TOKEN;
-      if (X_BEARER_TOKEN && marketData.x_rule_templates.length > 0) {
-        const rules = marketData.x_rule_templates.map((template: string, index: number) => ({
+      if (X_BEARER_TOKEN && normalizedRuleTemplates.length > 0) {
+        const rules = normalizedRuleTemplates.map((template: string, index: number) => ({
           value: template,
           tag: `market:${market.id}:${index}`,
         }));
