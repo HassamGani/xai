@@ -23,7 +23,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <div className="glass-card rounded-xl px-5 py-4 flex items-center justify-between">
                 <div>
                   <div className="flex items-center gap-3 mb-0.5">
-                    <h1 className="text-lg font-semibold">Prediction Ticker</h1>
+                    <h1 className="text-lg font-semibold">xPredict</h1>
                     <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-medium uppercase tracking-wider">
                       Beta
                     </span>
