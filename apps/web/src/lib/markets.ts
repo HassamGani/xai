@@ -1,5 +1,4 @@
 import { getSupabaseServer, getSupabaseAdmin } from "./supabase/server";
-import { getSupabaseAdmin } from "./supabase/server";
 
 export type MarketRow = {
   id: string;
