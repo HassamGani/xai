@@ -167,10 +167,11 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
           };
 
           let line: any;
-          if (typeof chart.addLineSeries === "function") {
-            line = chart.addLineSeries(opts);
+          const chartAny = chart as any;
+          if (typeof chartAny.addLineSeries === "function") {
+            line = chartAny.addLineSeries(opts);
           } else if (LineSeries) {
-            line = (chart as any).addSeries(LineSeries, opts);
+            line = chartAny.addSeries(LineSeries, opts);
           }
 
           if (line) {
