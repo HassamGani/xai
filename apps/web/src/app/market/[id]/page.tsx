@@ -10,6 +10,26 @@ type Props = {
   params: { id: string };
 };
 
+// Helper to find probability value with flexible key matching
+function findProb(probs: Record<string, number> | null | undefined, outcomeId: string): number {
+  if (!probs) return 0;
+  // Try exact match
+  if (outcomeId in probs) return probs[outcomeId];
+  // Try trimmed
+  const trimmed = outcomeId.trim();
+  if (trimmed in probs) return probs[trimmed];
+  // Try with leading space
+  const withSpace = " " + trimmed;
+  if (withSpace in probs) return probs[withSpace];
+  // Search all keys for case-insensitive match
+  for (const key of Object.keys(probs)) {
+    if (key.trim().toLowerCase() === trimmed.toLowerCase()) {
+      return probs[key];
+    }
+  }
+  return 0;
+}
+
 function toSeries(
   snapshots: { timestamp: string; probabilities: Record<string, number> }[],
   outcomes: { id: string; outcome_id: string; label: string }[]
@@ -19,15 +39,10 @@ function toSeries(
     id: o.id,
     label: o.label,
     color: palette[idx % palette.length],
-    data: snapshots.map((s) => {
-      // Try both outcome_id and trimmed version (some data has leading spaces)
-      const probs = s.probabilities ?? {};
-      const value = probs[o.outcome_id] ?? probs[o.outcome_id.trim()] ?? probs[" " + o.outcome_id] ?? 0;
-      return {
-        time: Math.floor(new Date(s.timestamp).getTime() / 1000),
-        value
-      };
-    })
+    data: snapshots.map((s) => ({
+      time: Math.floor(new Date(s.timestamp).getTime() / 1000),
+      value: findProb(s.probabilities, o.outcome_id)
+    }))
   }));
 }
 
@@ -44,18 +59,19 @@ export default async function MarketPage({ params }: Props) {
 
   const posts = await getMarketPosts(marketId, 25);
 
-  const outcomeProbs = outcomes.map((o) => {
-    // Try both outcome_id and trimmed version (some data has leading spaces)
-    const probs = state?.probabilities ?? {};
-    const probability = probs[o.outcome_id] ?? probs[o.outcome_id.trim()] ?? probs[" " + o.outcome_id] ?? o.current_probability ?? 0;
-    return {
-      id: o.id,
-      label: o.label,
-      probability
-    };
-  });
+  const outcomeProbs = outcomes.map((o) => ({
+    id: o.id,
+    label: o.label,
+    probability: findProb(state?.probabilities, o.outcome_id) || o.current_probability || 0
+  }));
 
   const chartSeries = toSeries(snapshots, outcomes);
+
+  // Debug log
+  console.log("Market:", market.id, "Outcomes:", outcomes.map(o => o.outcome_id), "Snapshots:", snapshots.length);
+  if (snapshots.length > 0) {
+    console.log("First snapshot probs keys:", Object.keys(snapshots[0].probabilities || {}));
+  }
 
   const displayPosts = posts.map((p) => ({
     id: p.scored.id,
