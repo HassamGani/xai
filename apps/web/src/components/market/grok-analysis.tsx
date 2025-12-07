@@ -345,14 +345,15 @@ export function GrokAnalysis({ marketId }: Props) {
               {imageUrl && (
                 <div className="mb-4">
                   <div className="relative rounded-2xl overflow-hidden border border-border bg-card shadow-lg">
-                    <a href={imageUrl} target="_blank" rel="noreferrer">
-                      <img
-                        src={imageUrl}
-                        alt="Prediction visual"
-                        className="w-full object-cover transition-transform duration-200 hover:scale-[1.005]"
-                        style={{ aspectRatio: "16 / 9", maxHeight: "220px" }}
-                        loading="lazy"
-                      />
+                    <a href={imageUrl} target="_blank" rel="noreferrer" className="block">
+                      <div className="w-full bg-black/5 flex items-center justify-center" style={{ maxHeight: "240px" }}>
+                        <img
+                          src={imageUrl}
+                          alt="Prediction visual"
+                          className="max-h-[240px] w-full object-contain"
+                          loading="lazy"
+                        />
+                      </div>
                     </a>
                     <div className="absolute bottom-2 right-2 text-[11px] px-2 py-1 rounded-full bg-black/65 text-white backdrop-blur">
                       AI-generated preview
