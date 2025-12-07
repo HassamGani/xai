@@ -11,13 +11,13 @@ const envSchema = z.object({
 const env = envSchema.parse(process.env);
 
 const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
-const userCache = new Map<string, { username: string | null; avatar: string | null }>();
+const userCache = new Map<string, { username: string | null; avatar: string | null; followers: number | null }>();
 
-async function fetchProfile(authorId: string): Promise<{ username: string | null; avatar: string | null } | null> {
+async function fetchProfile(authorId: string): Promise<{ username: string | null; avatar: string | null; followers: number | null } | null> {
   if (userCache.has(authorId)) return userCache.get(authorId)!;
   try {
     const res = await fetch(
-      `https://api.twitter.com/2/users/${authorId}?user.fields=username,profile_image_url`,
+      `https://api.twitter.com/2/users/${authorId}?user.fields=username,profile_image_url,public_metrics`,
       {
         headers: { Authorization: `Bearer ${env.X_BEARER_TOKEN}` },
       }
@@ -30,6 +30,7 @@ async function fetchProfile(authorId: string): Promise<{ username: string | null
     const profile = {
       username: data?.data?.username || null,
       avatar: data?.data?.profile_image_url || null,
+      followers: data?.data?.public_metrics?.followers_count ?? null,
     };
     userCache.set(authorId, profile);
     return profile;
@@ -46,7 +47,7 @@ async function main() {
     .select("id, author_id, author_username, text")
     .is("author_username", null)
     .not("author_id", "is", null)
-    .limit(200);
+    .limit(30);
 
   if (error) {
     console.error("Query error", error);
@@ -58,16 +59,18 @@ async function main() {
     return;
   }
 
-  const updates: Array<{ id: string; author_username: string }> = [];
+  const updates: Array<{ id: string; author_username: string; author_followers?: number | null }> = [];
   const avatarMap = new Map<string, { author_id: string; avatar_data: string; generation_prompt: string; sample_tweet: string | null }>();
 
   for (const row of rows) {
     const authorId = row.author_id as string;
     const profile = await fetchProfile(authorId);
     if (!profile) continue;
+    // small delay to avoid hitting X rate limits too quickly
+    await sleep(250);
 
     if (profile.username) {
-      updates.push({ id: row.id, author_username: profile.username });
+      updates.push({ id: row.id, author_username: profile.username, author_followers: profile.followers });
     }
     if (profile.avatar) {
       avatarMap.set(authorId, {
@@ -81,10 +84,9 @@ async function main() {
 
   // Apply username updates individually (avoids NOT NULL conflicts on other columns)
   for (const u of updates) {
-    const { error: upErr } = await supabase
-      .from("raw_posts")
-      .update({ author_username: u.author_username })
-      .eq("id", u.id);
+    const payload: Record<string, unknown> = { author_username: u.author_username };
+    if (u.author_followers != null) payload.author_followers = u.author_followers;
+    const { error: upErr } = await supabase.from("raw_posts").update(payload).eq("id", u.id);
     if (upErr) console.error("Update username error", { id: u.id, error: upErr });
   }
   if (updates.length > 0) console.log(`Updated ${updates.length} rows with usernames`);
@@ -110,5 +112,9 @@ function chunkArray<T>(arr: T[], size: number): T[][] {
     res.push(arr.slice(i, i + size));
   }
   return res;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
