@@ -105,6 +105,16 @@ export default async function HomePage() {
           <QaPanel compact />
         </TabsContent>
       </Tabs>
+
+      {/* Footer Credits */}
+      <footer className="border-t border-border pt-6 pb-4 text-center">
+        <p className="text-sm text-muted-foreground">
+          Made by{" "}
+          <span className="font-medium text-foreground">Hassam Gani</span>
+          {" & "}
+          <span className="font-medium text-foreground">Farhaan Siddiqui</span>
+        </p>
+      </footer>
     </div>
   );
 }
