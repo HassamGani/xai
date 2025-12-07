@@ -47,7 +47,7 @@ async function main() {
     .select("id, author_id, author_username, text")
     .is("author_username", null)
     .not("author_id", "is", null)
-    .limit(30);
+    .limit(10);
 
   if (error) {
     console.error("Query error", error);
@@ -67,7 +67,7 @@ async function main() {
     const profile = await fetchProfile(authorId);
     if (!profile) continue;
     // small delay to avoid hitting X rate limits too quickly
-    await sleep(250);
+    await sleep(2000);
 
     if (profile.username) {
       updates.push({ id: row.id, author_username: profile.username, author_followers: profile.followers });
