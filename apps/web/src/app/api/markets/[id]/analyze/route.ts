@@ -259,7 +259,6 @@ Search the web for recent news about "${market.question}" and provide your analy
           model: "grok-2-image-latest",
           prompt: imagePrompt,
           n: 1,
-          size: "512x512",
           response_format: "url"
         })
       });
@@ -284,13 +283,12 @@ Search the web for recent news about "${market.question}" and provide your analy
             "Content-Type": "application/json",
             Authorization: `Bearer ${apiKey}`
           },
-          body: JSON.stringify({
-            model: "grok-2-image-latest",
-            prompt: imagePrompt,
-            n: 1,
-            size: "512x512",
-            response_format: "b64_json"
-          })
+        body: JSON.stringify({
+          model: "grok-2-image-latest",
+          prompt: imagePrompt,
+          n: 1,
+          response_format: "b64_json"
+        })
         });
 
         if (imgRes2.ok) {
