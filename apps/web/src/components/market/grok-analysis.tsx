@@ -38,6 +38,7 @@ export function GrokAnalysis({ marketId }: Props) {
   const [selectedDepth, setSelectedDepth] = useState<AnalysisDepth | null>(null);
   const [analysis, setAnalysis] = useState<string>("");
   const [citations, setCitations] = useState<Citation[]>([]);
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [generatedAt, setGeneratedAt] = useState<string | null>(null);
@@ -49,6 +50,7 @@ export function GrokAnalysis({ marketId }: Props) {
     setError(null);
     setAnalysis("");
     setCitations([]);
+    setImageUrl(null);
     setIsOpen(true);
 
     try {
@@ -64,6 +66,9 @@ export function GrokAnalysis({ marketId }: Props) {
       if (data.analysis) {
         if (data.citations && data.citations.length > 0) {
           setCitations(data.citations);
+        }
+        if (data.image_url) {
+          setImageUrl(data.image_url);
         }
         
         const text = data.analysis;
@@ -337,6 +342,21 @@ export function GrokAnalysis({ marketId }: Props) {
 
           {analysis && (
             <div className="space-y-0">
+              {imageUrl && (
+                <div className="mb-4">
+                  <div className="relative rounded-xl overflow-hidden border border-border bg-card">
+                    <img
+                      src={imageUrl}
+                      alt="Prediction visual"
+                      className="w-full h-56 object-cover"
+                      loading="lazy"
+                    />
+                    <div className="absolute bottom-2 right-2 text-[11px] px-2 py-1 rounded-full bg-black/60 text-white">
+                      AI-generated preview
+                    </div>
+                  </div>
+                </div>
+              )}
               {renderAnalysis(analysis)}
               {loading && (
                 <span className="inline-block w-2 h-5 bg-primary animate-pulse ml-0.5 rounded-sm" />

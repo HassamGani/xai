@@ -225,12 +225,55 @@ Search the web for recent news about "${market.question}" and provide your analy
       }
     }
 
+    // Attempt to generate an illustrative image for the prediction
+    let imageUrl: string | null = null;
+    try {
+      const topOutcome = (outcomes ?? [])
+        .slice()
+        .sort((a, b) => (b.current_probability ?? 0) - (a.current_probability ?? 0))[0];
+
+      const imagePrompt = [
+        `Create a photorealistic, news-style image that illustrates the predicted outcome for this market: "${market.question}".`,
+        topOutcome ? `Focus on the "${topOutcome.label}" scenario as if it is realized.` : "",
+        "If it is a sports prediction, show real teams/players/colors celebrating a win with stadium atmosphere.",
+        "If it is an election or person, show the person in a plausible real-world victory or key-moment setting.",
+        "If it's about dates or milestones, use symbolic but realistic imagery tied to the event.",
+        "No overlaid text. High detail, cinematic lighting."
+      ].filter(Boolean).join(" ");
+
+      const imgRes = await fetch("https://api.x.ai/v1/images/generations", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: "grok-2-image",
+          prompt: imagePrompt,
+          n: 1,
+          size: "512x512",
+          response_format: "url"
+        })
+      });
+
+      if (imgRes.ok) {
+        const imgJson = await imgRes.json();
+        const url = imgJson?.data?.[0]?.url;
+        if (url) imageUrl = url;
+      } else {
+        console.warn("Image generation skipped, status:", imgRes.status);
+      }
+    } catch (imgErr) {
+      console.warn("Image generation error:", imgErr);
+    }
+
     return NextResponse.json({
       analysis,
       citations,
       depth,
       generated_at: new Date().toISOString(),
-      market_id: marketId
+      market_id: marketId,
+      image_url: imageUrl
     });
   } catch (error) {
     console.error("Analysis endpoint error:", error);
