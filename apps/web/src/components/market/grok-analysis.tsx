@@ -349,7 +349,8 @@ export function GrokAnalysis({ marketId }: Props) {
                       <img
                         src={imageUrl}
                         alt="Prediction visual"
-                        className="w-full aspect-[16/9] object-cover transition-transform duration-200 hover:scale-[1.01]"
+                        className="w-full object-cover transition-transform duration-200 hover:scale-[1.01]"
+                        style={{ aspectRatio: "16 / 9", maxHeight: "320px" }}
                         loading="lazy"
                       />
                     </a>
