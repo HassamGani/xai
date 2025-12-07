@@ -14,6 +14,7 @@ import { DeleteMarketButton } from "@/components/market/delete-market-button";
 import { AddTickerForm } from "@/components/market/add-ticker-form";
 import { RemoveTickerButton } from "@/components/market/remove-ticker-button";
 import { LivePanel } from "@/components/market/live-panel";
+import { CorrelationInsights } from "@/components/market/correlation-insights";
 import { listMarkets, type MarketRow } from "@/lib/markets";
 
 type Props = {
@@ -220,6 +221,15 @@ export default async function MarketPage({ params }: Props) {
       <div className="space-y-3">
         <h2 className="text-lg font-semibold">AI Analysis</h2>
         <GrokAnalysis marketId={marketId} />
+      </div>
+
+      {/* Cross-Market Correlation Insights */}
+      <div className="space-y-3">
+        <h2 className="text-lg font-semibold">Cross-Market Correlations</h2>
+        <p className="text-sm text-muted-foreground">
+          Discover markets with correlated probability movements and causality chains.
+        </p>
+        <CorrelationInsights marketId={marketId} />
       </div>
 
       <div className="space-y-3">
