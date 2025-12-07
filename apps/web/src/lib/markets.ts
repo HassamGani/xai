@@ -1,4 +1,5 @@
 import { getSupabaseServer } from "./supabase/server";
+import { getSupabaseAdmin } from "./supabase/server";
 
 export type MarketRow = {
   id: string;
@@ -73,7 +74,8 @@ export type RawPostRow = {
 };
 
 export async function listMarkets() {
-  const supabase = getSupabaseServer();
+  // Prefer admin client to avoid any RLS issues when listing markets
+  const supabase = getSupabaseAdmin() || getSupabaseServer();
   if (!supabase) return [];
   const { data, error } = await supabase.from("markets").select("*").order("created_at", { ascending: false });
 
