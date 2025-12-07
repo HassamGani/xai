@@ -39,6 +39,7 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
   const [mounted, setMounted] = useState(false);
   const [timeRange, setTimeRange] = useState<TimeRange>("all");
   const [tooltips, setTooltips] = useState<TooltipData>([]);
+  const [isHovering, setIsHovering] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -66,13 +67,15 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
     };
     
     if (!p.time || !p.point || !p.seriesData || !chartRef.current) {
+      setIsHovering(false);
       setTooltips([]);
       return;
     }
 
-    const tips: TooltipData = [];
-    const chart = chartRef.current as { timeScale: () => { width: () => number } };
+    setIsHovering(true);
 
+    const tips: TooltipData = [];
+    
     // Get values from each series
     for (const s of series) {
       const seriesRef = seriesMapRef.current.get(s.id);
@@ -224,7 +227,7 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
               color: s.color,
               lineWidth: 2,
               title: s.label,
-              lastValueVisible: false,
+              lastValueVisible: false, // We handle labels manually with tooltips
               priceLineVisible: false,
               crosshairMarkerVisible: true,
               crosshairMarkerRadius: 4,
@@ -330,6 +333,57 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
     );
   }
 
+  // Calculate positions for right-aligned labels (when not hovering)
+  const rightLabels = !isHovering && chartRef.current 
+    ? filteredSeries
+        .filter(s => s.data.length > 0)
+        .map(s => {
+          const lastPoint = s.data[s.data.length - 1];
+          const seriesRef = seriesMapRef.current.get(s.id);
+          let y = 0;
+          
+          if (seriesRef && typeof (seriesRef as any).priceToCoordinate === 'function') {
+            y = (seriesRef as any).priceToCoordinate(lastPoint.value) ?? 0;
+          }
+
+          return {
+            id: s.id,
+            label: s.label,
+            color: s.color,
+            value: lastPoint.value,
+            y
+          };
+        })
+        .sort((a, b) => a.y - b.y) // Sort by Y position
+    : [];
+
+  // Apply collision detection to right labels too
+  if (rightLabels.length > 0) {
+    const TOOLTIP_HEIGHT = 28;
+    const CHART_HEIGHT = (containerRef.current?.clientHeight ?? height);
+
+    // Forward pass
+    for (let i = 1; i < rightLabels.length; i++) {
+      const prev = rightLabels[i - 1];
+      const curr = rightLabels[i];
+      if (curr.y < prev.y + TOOLTIP_HEIGHT) {
+        curr.y = prev.y + TOOLTIP_HEIGHT;
+      }
+    }
+
+    // Bottom check
+    const last = rightLabels[rightLabels.length - 1];
+    if (last && last.y > CHART_HEIGHT - TOOLTIP_HEIGHT/2) {
+      const diff = last.y - (CHART_HEIGHT - TOOLTIP_HEIGHT/2);
+      last.y -= diff;
+      for (let i = rightLabels.length - 2; i >= 0; i--) {
+        if (rightLabels[i + 1].y - rightLabels[i].y < TOOLTIP_HEIGHT) {
+          rightLabels[i].y = rightLabels[i + 1].y - TOOLTIP_HEIGHT;
+        }
+      }
+    }
+  }
+
   return (
     <div className="space-y-3">
       {/* Time range selector */}
@@ -359,13 +413,13 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
           </div>
         )}
 
-        {/* Floating Tooltips */}
-        {tooltips.map((tip) => (
+        {/* Hover Tooltips (follow cursor) */}
+        {isHovering && tooltips.map((tip) => (
           <div
-            key={tip.label}
+            key={`hover-${tip.label}`}
             className="absolute pointer-events-none flex items-center gap-2 transform -translate-y-1/2 z-10 transition-transform duration-75"
             style={{
-              left: tip.x + 10, // Offset to right of cursor
+              left: tip.x + 10,
               top: tip.y,
             }}
           >
@@ -377,6 +431,29 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
               <span className="text-white whitespace-nowrap">{tip.label}</span>
               <span className="font-bold tabular-nums" style={{ color: tip.color }}>
                 {(tip.value * 100).toFixed(1)}%
+              </span>
+            </div>
+          </div>
+        ))}
+
+        {/* Right-side Labels (when NOT hovering) */}
+        {!isHovering && rightLabels.map((lbl) => (
+          <div
+            key={`right-${lbl.id}`}
+            className="absolute pointer-events-none flex items-center gap-2 transform -translate-y-1/2 z-10 transition-all duration-200"
+            style={{
+              right: 10,
+              top: lbl.y,
+            }}
+          >
+            <div 
+              className="px-2 py-1 rounded shadow-lg backdrop-blur-md border border-white/10 text-xs font-medium flex items-center gap-2"
+              style={{ backgroundColor: "rgba(0,0,0,0.7)" }}
+            >
+              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: lbl.color }} />
+              <span className="text-white whitespace-nowrap">{lbl.label}</span>
+              <span className="font-bold tabular-nums" style={{ color: lbl.color }}>
+                {(lbl.value * 100).toFixed(1)}%
               </span>
             </div>
           </div>
