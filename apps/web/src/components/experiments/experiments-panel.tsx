@@ -33,12 +33,11 @@ export function ExperimentsPanel({ experiments: initial }: Props) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          question,
-          // Grok infers resolved outcome + date via search; no manual inputs
+          question
         })
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to create experiment");
+      if (!res.ok) throw new Error(data.error || data.details || "Failed to create experiment");
       if (data.experiment) {
         setExperiments((prev) => [data.experiment, ...prev]);
         setQuestion("");

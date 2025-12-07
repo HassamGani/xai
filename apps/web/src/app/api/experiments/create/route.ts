@@ -23,24 +23,25 @@ export async function POST(request: Request) {
     const json = await request.json();
     const { question } = bodySchema.parse(json);
 
-    // Ask Grok to normalize the question, propose outcomes, AND infer resolved outcome/date via web search
-    const grokRes = await fetch(GROK_API_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: "grok-3-latest",
-        messages: [
-          {
-            role: "system",
-            content:
-              "You help create experiment markets for backtesting resolved questions. Use web search to infer the resolved outcome and resolution date if possible. Return strict JSON only."
-          },
-          {
-            role: "user",
-            content: `Question: "${question}"
+    // Helper to call Grok with optional search; fallback to no-search if the first attempt fails
+    async function callGrok(useSearch: boolean) {
+      const res = await fetch(GROK_API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: "grok-3-latest",
+          messages: [
+            {
+              role: "system",
+              content:
+                "You help create experiment markets for backtesting resolved questions. Use web search to infer the resolved outcome and resolution date if possible. Return strict JSON only."
+            },
+            {
+              role: "user",
+              content: `Question: "${question}"
 Return JSON ONLY:
 {
   "normalized_question": string,
@@ -48,13 +49,21 @@ Return JSON ONLY:
   "resolved_outcome_label": string | null,
   "resolved_at": string | null
 }`
-          }
-        ],
-        temperature: 0.2,
-        max_tokens: 500,
-        search: true
-      })
-    });
+            }
+          ],
+          temperature: 0.2,
+          max_tokens: 500,
+          search: useSearch || undefined
+        })
+      });
+      return res;
+    }
+
+    let grokRes = await callGrok(true);
+    if (!grokRes.ok) {
+      // Retry without search if the model rejects the search argument
+      grokRes = await callGrok(false);
+    }
 
     if (!grokRes.ok) {
       const errTxt = await grokRes.text();
