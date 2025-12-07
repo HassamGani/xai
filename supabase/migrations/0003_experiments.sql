@@ -1,6 +1,6 @@
 -- Experiments: backtesting resolved markets with archival data or simulated timelines
 
-CREATE TABLE IF NOT EXISTS experiment_markets (
+CREATE TABLE IF NOT EXISTS public.experiment_markets (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   question text NOT NULL,
   normalized_question text,
@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS experiment_markets (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE TABLE IF NOT EXISTS experiment_runs (
+CREATE TABLE IF NOT EXISTS public.experiment_runs (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   experiment_id uuid NOT NULL REFERENCES experiment_markets(id) ON DELETE CASCADE,
   status text NOT NULL DEFAULT 'pending',
@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS experiment_runs (
   error text
 );
 
-CREATE TABLE IF NOT EXISTS experiment_snapshots (
+CREATE TABLE IF NOT EXISTS public.experiment_snapshots (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   experiment_id uuid NOT NULL REFERENCES experiment_markets(id) ON DELETE CASCADE,
   timestamp timestamptz NOT NULL,
