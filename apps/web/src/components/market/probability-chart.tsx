@@ -106,6 +106,21 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
             borderVisible: false,
             timeVisible: true,
             secondsVisible: false
+          },
+          crosshair: {
+            mode: 0, // Normal mode - crosshair moves freely
+            vertLine: {
+              width: 1,
+              color: "rgba(255,255,255,0.3)",
+              style: 2, // Dashed
+              labelBackgroundColor: "rgba(59, 130, 246, 0.8)"
+            },
+            horzLine: {
+              width: 1,
+              color: "rgba(255,255,255,0.3)",
+              style: 2,
+              labelBackgroundColor: "rgba(59, 130, 246, 0.8)"
+            }
           }
         });
         chartRef.current = chart;
@@ -116,31 +131,31 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
           try {
             let line: unknown;
 
+            const seriesOpts = {
+              color: s.color,
+              lineWidth: 2,
+              title: s.label,
+              lastValueVisible: true,
+              priceLineVisible: false,
+              crosshairMarkerVisible: true,
+              crosshairMarkerRadius: 5,
+              crosshairMarkerBorderColor: s.color,
+              crosshairMarkerBackgroundColor: "#fff"
+            };
+
             // Try v4 style first (addLineSeries)
             if (typeof chartAny.addLineSeries === "function") {
-              line = (chartAny.addLineSeries as Function)({
-                color: s.color,
-                lineWidth: 2,
-                title: s.label
-              });
+              line = (chartAny.addLineSeries as Function)(seriesOpts);
             }
             // Try v5 style with LineSeries
             else if (LineSeries && typeof chartAny.addSeries === "function") {
-              line = (chartAny.addSeries as Function)(LineSeries, {
-                color: s.color,
-                lineWidth: 2,
-                title: s.label
-              });
+              line = (chartAny.addSeries as Function)(LineSeries, seriesOpts);
             }
             // Fallback
             else if (typeof chartAny.addSeries === "function") {
               line = (chartAny.addSeries as Function)({ type: "Line" });
               if (line && typeof (line as Record<string, unknown>).applyOptions === "function") {
-                (line as { applyOptions: Function }).applyOptions({
-                  color: s.color,
-                  lineWidth: 2,
-                  title: s.label
-                });
+                (line as { applyOptions: Function }).applyOptions(seriesOpts);
               }
             }
 
