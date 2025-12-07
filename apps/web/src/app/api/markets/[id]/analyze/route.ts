@@ -254,11 +254,11 @@ Search the web for recent news about "${market.question}" and provide your analy
           Authorization: `Bearer ${apiKey}`
         },
         body: JSON.stringify({
-          model: "grok-2-image",
+          model: "grok-2-image-latest",
           prompt: imagePrompt,
           n: 1,
           size: "512x512",
-          response_format: "url"
+          response_format: "b64_json"
         })
       });
 
