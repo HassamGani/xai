@@ -62,15 +62,13 @@ export function GrokAnalysis({ marketId }: Props) {
       const data = await res.json();
       
       if (data.analysis) {
-        // Set citations if available
         if (data.citations && data.citations.length > 0) {
           setCitations(data.citations);
         }
         
-        // Typing effect
         const text = data.analysis;
         let index = 0;
-        const typeSpeed = depth === "shallow" ? 3 : depth === "medium" ? 4 : 5;
+        const typeSpeed = depth === "shallow" ? 2 : depth === "medium" ? 3 : 4;
         
         const typeWriter = () => {
           if (index < text.length) {
@@ -93,14 +91,12 @@ export function GrokAnalysis({ marketId }: Props) {
     }
   };
 
-  // Auto-scroll as text appears
   useEffect(() => {
     if (contentRef.current && loading) {
       contentRef.current.scrollTop = contentRef.current.scrollHeight;
     }
   }, [analysis, loading]);
 
-  // Close on escape key
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === "Escape" && !loading) setIsOpen(false);
@@ -109,89 +105,137 @@ export function GrokAnalysis({ marketId }: Props) {
     return () => window.removeEventListener("keydown", handleEscape);
   }, [loading]);
 
-  // Render formatted text with citation markers
-  const renderAnalysis = (text: string) => {
-    if (!text) return null;
+  // Format inline text with bold and citations
+  const formatInlineText = (text: string): React.ReactNode[] => {
+    // Split by bold markers and citation markers
+    const parts = text.split(/(\*\*[^*]+\*\*|\[\d+\])/g);
     
-    return text.split("\n").map((line, idx) => {
-      const trimmed = line.trim();
-      
-      // Headers with ** **
-      if (trimmed.match(/^\d+\.\s*\*\*.*\*\*/)) {
-        const num = trimmed.match(/^\d+/)?.[0];
-        const headerText = trimmed.replace(/^\d+\.\s*\*\*/, "").replace(/\*\*:?.*$/, "").trim();
-        return (
-          <h4 key={idx} className="font-semibold text-foreground mt-5 mb-2 first:mt-0 flex items-center gap-2">
-            <span className="w-6 h-6 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center font-bold shrink-0">
-              {num}
-            </span>
-            {headerText}
-          </h4>
-        );
-      }
-      
-      if (trimmed.startsWith("**") && trimmed.endsWith("**")) {
-        return (
-          <h4 key={idx} className="font-semibold text-foreground mt-5 mb-2 first:mt-0">
-            {trimmed.slice(2, -2).replace(/:/g, "")}
-          </h4>
-        );
-      }
-      
-      // Bullet points
-      if (trimmed.startsWith("-") || trimmed.startsWith("•") || trimmed.startsWith("*")) {
-        const content = trimmed.replace(/^[-•*]\s*/, "");
-        const formatted = formatInlineText(content);
-        return (
-          <div key={idx} className="flex gap-2 my-1.5 text-sm text-muted-foreground">
-            <span className="text-primary mt-0.5">•</span>
-            <span className="leading-relaxed">{formatted}</span>
-          </div>
-        );
-      }
-      
-      // Regular paragraphs
-      if (trimmed) {
-        const formatted = formatInlineText(trimmed);
-        return (
-          <p key={idx} className="text-sm text-muted-foreground my-2 leading-relaxed">
-            {formatted}
-          </p>
-        );
-      }
-      
-      return <div key={idx} className="h-2" />;
-    });
-  };
-
-  // Format inline text (bold, citations)
-  const formatInlineText = (text: string) => {
-    // Handle bold and citation markers like [1], [2]
-    const parts = text.split(/(\*\*.*?\*\*|\[\d+\])/g);
     return parts.map((part, i) => {
+      // Bold text
       if (part.startsWith("**") && part.endsWith("**")) {
-        return <strong key={i} className="text-foreground">{part.slice(2, -2)}</strong>;
+        return (
+          <strong key={i} className="font-semibold text-foreground">
+            {part.slice(2, -2)}
+          </strong>
+        );
       }
+      // Citation marker
       if (part.match(/^\[\d+\]$/)) {
         const num = part.slice(1, -1);
         const citation = citations[parseInt(num) - 1];
-        if (citation) {
-          return (
-            <a
-              key={i}
-              href={citation.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center justify-center w-4 h-4 text-[10px] font-bold bg-primary/10 text-primary rounded hover:bg-primary/20 transition-colors ml-0.5"
-              title={citation.title}
-            >
-              {num}
-            </a>
-          );
-        }
+        return (
+          <a
+            key={i}
+            href={citation?.url || "#"}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold bg-primary text-primary-foreground rounded hover:bg-primary/80 transition-colors mx-0.5 no-underline"
+            title={citation?.title || `Source ${num}`}
+          >
+            {num}
+          </a>
+        );
       }
       return part;
+    }).filter(Boolean);
+  };
+
+  // Render the full analysis with proper markdown
+  const renderAnalysis = (text: string): React.ReactNode => {
+    if (!text) return null;
+    
+    const lines = text.split("\n");
+    const elements: React.ReactNode[] = [];
+    let currentListItems: string[] = [];
+    
+    const flushList = () => {
+      if (currentListItems.length > 0) {
+        elements.push(
+          <ul key={`list-${elements.length}`} className="my-3 space-y-2">
+            {currentListItems.map((item, i) => (
+              <li key={i} className="flex gap-3 text-sm text-muted-foreground">
+                <span className="w-1.5 h-1.5 rounded-full bg-primary mt-2 shrink-0" />
+                <span className="leading-relaxed flex-1">{formatInlineText(item)}</span>
+              </li>
+            ))}
+          </ul>
+        );
+        currentListItems = [];
+      }
+    };
+    
+    lines.forEach((line, idx) => {
+      const trimmed = line.trim();
+      
+      // Skip empty lines but flush any pending list
+      if (!trimmed) {
+        flushList();
+        return;
+      }
+      
+      // Section headers (numbered like "1. **Header**:" or "**Header**:")
+      const numberedHeaderMatch = trimmed.match(/^(\d+)\.\s*\*\*([^*]+)\*\*:?(.*)$/);
+      if (numberedHeaderMatch) {
+        flushList();
+        const [, num, headerText, rest] = numberedHeaderMatch;
+        elements.push(
+          <div key={idx} className="mt-5 first:mt-0">
+            <h4 className="flex items-center gap-2 font-semibold text-foreground mb-2">
+              <span className="flex items-center justify-center w-6 h-6 rounded-full bg-primary text-primary-foreground text-xs font-bold">
+                {num}
+              </span>
+              <span>{headerText}</span>
+            </h4>
+            {rest && rest.trim() && (
+              <p className="text-sm text-muted-foreground leading-relaxed pl-8">
+                {formatInlineText(rest.trim())}
+              </p>
+            )}
+          </div>
+        );
+        return;
+      }
+      
+      // Standalone bold headers (like "**Summary**:")
+      const boldHeaderMatch = trimmed.match(/^\*\*([^*]+)\*\*:?(.*)$/);
+      if (boldHeaderMatch && !trimmed.startsWith("-") && !trimmed.startsWith("•")) {
+        flushList();
+        const [, headerText, rest] = boldHeaderMatch;
+        elements.push(
+          <div key={idx} className="mt-4 first:mt-0">
+            <h4 className="font-semibold text-foreground mb-1.5 text-[15px]">
+              {headerText}
+            </h4>
+            {rest && rest.trim() && (
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                {formatInlineText(rest.trim())}
+              </p>
+            )}
+          </div>
+        );
+        return;
+      }
+      
+      // Bullet points (-, •, *)
+      if (trimmed.match(/^[-•*]\s+/)) {
+        const content = trimmed.replace(/^[-•*]\s+/, "");
+        currentListItems.push(content);
+        return;
+      }
+      
+      // Regular paragraph
+      flushList();
+      elements.push(
+        <p key={idx} className="text-sm text-muted-foreground leading-relaxed my-2">
+          {formatInlineText(trimmed)}
+        </p>
+      );
     });
+    
+    // Flush any remaining list items
+    flushList();
+    
+    return <>{elements}</>;
   };
 
   return (
@@ -229,7 +273,7 @@ export function GrokAnalysis({ marketId }: Props) {
 
       {/* Side Panel */}
       <div 
-        className={`fixed top-0 right-0 h-full w-full sm:w-[520px] bg-background border-l border-border shadow-2xl z-50 transform transition-transform duration-300 ease-out flex flex-col ${
+        className={`fixed top-0 right-0 h-full w-full sm:w-[540px] bg-background border-l border-border shadow-2xl z-50 transform transition-transform duration-300 ease-out flex flex-col ${
           isOpen ? "translate-x-0" : "translate-x-full"
         }`}
       >
@@ -244,7 +288,7 @@ export function GrokAnalysis({ marketId }: Props) {
             <div>
               <h2 className="font-semibold text-lg text-foreground">Grok Analysis</h2>
               <p className="text-xs text-muted-foreground">
-                {selectedDepth && DEPTH_CONFIG[selectedDepth].label} • Web search enabled
+                {selectedDepth && `${DEPTH_CONFIG[selectedDepth].icon} ${DEPTH_CONFIG[selectedDepth].label}`} • Web search enabled
               </p>
             </div>
           </div>
@@ -292,17 +336,15 @@ export function GrokAnalysis({ marketId }: Props) {
           )}
 
           {analysis && (
-            <>
-              <div className="prose prose-sm max-w-none">
-                {renderAnalysis(analysis)}
-                {loading && (
-                  <span className="inline-block w-2 h-4 bg-primary animate-pulse ml-0.5" />
-                )}
-              </div>
-
+            <div className="space-y-0">
+              {renderAnalysis(analysis)}
+              {loading && (
+                <span className="inline-block w-2 h-5 bg-primary animate-pulse ml-0.5 rounded-sm" />
+              )}
+              
               {/* Citations Section */}
               {citations.length > 0 && !loading && (
-                <div className="mt-6 pt-4 border-t border-border">
+                <div className="mt-6 pt-5 border-t border-border">
                   <h4 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
                     <svg className="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
@@ -318,7 +360,7 @@ export function GrokAnalysis({ marketId }: Props) {
                         rel="noopener noreferrer"
                         className="flex items-start gap-3 p-3 rounded-lg border border-border hover:border-primary/30 hover:bg-accent/50 transition-colors group"
                       >
-                        <span className="w-5 h-5 rounded bg-primary/10 text-primary text-xs font-bold flex items-center justify-center shrink-0">
+                        <span className="flex items-center justify-center w-6 h-6 rounded bg-primary text-primary-foreground text-xs font-bold shrink-0">
                           {idx + 1}
                         </span>
                         <div className="min-w-0 flex-1">
@@ -326,15 +368,21 @@ export function GrokAnalysis({ marketId }: Props) {
                             {citation.title}
                           </p>
                           <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
-                            {new URL(citation.url).hostname}
+                            {(() => {
+                              try {
+                                return new URL(citation.url).hostname.replace("www.", "");
+                              } catch {
+                                return citation.url;
+                              }
+                            })()}
                           </p>
                           {citation.snippet && (
-                            <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                            <p className="text-xs text-muted-foreground mt-1.5 line-clamp-2 leading-relaxed">
                               {citation.snippet}
                             </p>
                           )}
                         </div>
-                        <svg className="w-4 h-4 text-muted-foreground group-hover:text-primary shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-4 h-4 text-muted-foreground group-hover:text-primary shrink-0 mt-0.5 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                         </svg>
                       </a>
@@ -342,7 +390,7 @@ export function GrokAnalysis({ marketId }: Props) {
                   </div>
                 </div>
               )}
-            </>
+            </div>
           )}
         </div>
 
@@ -353,7 +401,7 @@ export function GrokAnalysis({ marketId }: Props) {
               <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
               </svg>
-              <span>xAI Grok + Web Search</span>
+              <span>xAI Grok</span>
               {generatedAt && !loading && (
                 <>
                   <span>•</span>
