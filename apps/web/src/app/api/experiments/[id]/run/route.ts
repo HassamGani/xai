@@ -142,9 +142,12 @@ Return JSON ONLY:
       }
     }
 
-    // Build search params
+    // Build search params - exclude retweets and require English
+    const baseQuery = queryJson?.query || exp.normalized_question || exp.question;
+    const fullQuery = `${baseQuery} -is:retweet lang:en`;
+    
     const searchParams = new URLSearchParams();
-    searchParams.set("query", queryJson?.query || exp.normalized_question || exp.question);
+    searchParams.set("query", fullQuery);
     searchParams.set("max_results", "100");
     searchParams.set("tweet.fields", "author_id,created_at,public_metrics,text,referenced_tweets");
     searchParams.set("expansions", "author_id");
@@ -164,13 +167,23 @@ Return JSON ONLY:
     }
 
     const searchJson = await searchRes.json();
-    const posts = (searchJson.data || []) as Array<{
+    let posts = (searchJson.data || []) as Array<{
       id: string;
       text: string;
       author_id: string;
       created_at: string;
+      referenced_tweets?: Array<{ type: string; id: string }>;
       public_metrics?: { like_count?: number; retweet_count?: number; reply_count?: number; quote_count?: number };
     }>;
+
+    // Filter out retweets (double-check: by text pattern and referenced_tweets)
+    posts = posts.filter((p) => {
+      // Skip if text starts with "RT @"
+      if (p.text.startsWith("RT @")) return false;
+      // Skip if it has a retweet reference
+      if (p.referenced_tweets?.some((r) => r.type === "retweeted")) return false;
+      return true;
+    });
 
     // Sort posts oldest-first (chronological order like real-time ingestion)
     posts.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
@@ -272,23 +285,33 @@ Tweet by @${author?.username || post.author_id}:
     };
 
     for (const row of scoredRows) {
-      const pm = row.post.public_metrics || {};
       const followers = users.get(row.post.author_id)?.public_metrics?.followers_count || 0;
-      const weight = Math.log10(Math.max(followers, 10)) / 5; // mild weight
+      // Weight based on follower count (1.0 to 2.0 range)
+      const followerWeight = 1 + Math.min(Math.log10(Math.max(followers, 10)) / 7, 1);
+      
       for (const label of labels) {
         const s = row.scores[label] as any;
         if (!s || typeof s !== "object") continue;
-        const delta =
-          (s.relevance ?? 0) *
-          (Math.abs(s.stance ?? 0)) *
-          (s.strength ?? 0) *
-          (s.credibility ?? 1) *
-          (s.stance ?? 0 >= 0 ? 1 : -1) *
-          (1 + weight);
+        
+        const relevance = s.relevance ?? 0;
+        const stance = s.stance ?? 0; // -1 to 1: negative = against, positive = for
+        const strength = s.strength ?? 0;
+        const credibility = s.credibility ?? 0.5;
+        
+        // Skip low relevance posts
+        if (relevance < 0.2) continue;
+        
+        // Delta = direction * magnitude
+        // Positive stance adds to this outcome, negative stance subtracts
+        const magnitude = relevance * strength * credibility * followerWeight;
+        const delta = stance * magnitude;
+        
         evidence[label] = (evidence[label] || 0) + delta;
       }
-      // snapshot after each post
-      const probs = softmax(evidence);
+      
+      // Create snapshot after processing each post
+      // Use temperature 0.5 for more responsive probability changes
+      const probs = softmax(evidence, 0.5);
       snapshotRows.push({
         experiment_id: id,
         timestamp: new Date(row.post.created_at).toISOString(),
