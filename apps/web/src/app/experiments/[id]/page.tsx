@@ -1,7 +1,6 @@
 import { notFound } from "next/navigation";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
-import { ProbabilityChart } from "@/components/market/probability-chart";
-import { RunExperimentButton } from "@/components/experiments/run-experiment-button";
+import { ExperimentDetailClient } from "@/components/experiments/experiment-detail-client";
 
 export const dynamic = "force-dynamic";
 
@@ -40,21 +39,7 @@ export default async function ExperimentPage({ params }: { params: { id: string 
     .eq("experiment_id", params.id)
     .order("timestamp", { ascending: true });
 
-  const outcomes = (exp.outcomes || []) as Array<{ label: string }>;
-  const outcomeLabels = outcomes.map((o) => o.label);
-
-  // Build chart series from snapshots
-  const series = outcomeLabels.map((label, idx) => ({
-    id: label,
-    label,
-    color: CHART_COLORS[idx % CHART_COLORS.length],
-    data: (snapshots || []).map((s) => ({
-      time: Math.floor(new Date(s.timestamp).getTime() / 1000),
-      value: (s.probabilities as Record<string, number>)[label] ?? 0
-    }))
-  }));
-
-  const lastRun = runs?.[0];
+  const lastRun = runs?.[0] || null;
 
   return (
     <div className="space-y-6">
@@ -80,29 +65,8 @@ export default async function ExperimentPage({ params }: { params: { id: string 
           </div>
         )}
       </div>
-
-      <div className="rounded-2xl border border-border bg-card/70 p-4 shadow-sm">
-        <div className="flex items-center justify-between mb-2">
-          <h3 className="text-sm font-semibold">Probability timeline</h3>
-          <RunExperimentButton experimentId={exp.id} />
-        </div>
-        {series.every((s) => s.data.length === 0) ? (
-          <p className="text-sm text-muted-foreground">No snapshots yet. Run the experiment to generate.</p>
-        ) : (
-          <ProbabilityChart series={series} height={320} />
-        )}
-      </div>
+      <ExperimentDetailClient experiment={exp} lastRun={lastRun} snapshots={snapshots || []} />
     </div>
   );
 }
-
-const CHART_COLORS = [
-  "#2563eb",
-  "#16a34a",
-  "#a855f7",
-  "#f97316",
-  "#0ea5e9",
-  "#e11d48",
-  "#84cc16"
-];
 
