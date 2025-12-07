@@ -50,8 +50,7 @@ export async function POST(
   const initialProb: number = Math.min(Math.max(body?.initial_probability ?? 0.05, 0.01), 0.2);
 
   if (!label || label.length < 2) return jsonResponse({ error: "Label required" }, 400);
-  if (!ruleTemplate || ruleTemplate.length < 3)
-    return jsonResponse({ error: "Rule template required" }, 400);
+  // ruleTemplate is optional; will be Grok-generated if missing
 
   // Fetch market and outcomes
   const [{ data: market }, { data: outcomes }] = await Promise.all([
