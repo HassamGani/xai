@@ -49,8 +49,8 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
     series.forEach((s) => {
       const opts = {
         color: s.color,
-        lineWidth: 2,
-        priceFormat: { type: "price", minMove: 0.001 },
+        lineWidth: 2 as const,
+        priceFormat: { type: "price" as const, minMove: 0.001 },
         lastValueVisible: true,
         title: s.label
       };
