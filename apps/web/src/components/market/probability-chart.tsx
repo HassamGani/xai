@@ -14,21 +14,45 @@ type Props = {
   height?: number;
 };
 
+type TimeRange = "1d" | "1w" | "1m" | "all";
+
+const TIME_RANGES: { value: TimeRange; label: string; seconds: number | null }[] = [
+  { value: "1d", label: "1D", seconds: 24 * 60 * 60 },
+  { value: "1w", label: "1W", seconds: 7 * 24 * 60 * 60 },
+  { value: "1m", label: "1M", seconds: 30 * 24 * 60 * 60 },
+  { value: "all", label: "All", seconds: null }
+];
+
 export function ProbabilityChart({ series, height = 320 }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<unknown>(null);
   const [error, setError] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [timeRange, setTimeRange] = useState<TimeRange>("all");
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
+  // Filter series data by time range
+  const filteredSeries = series.map((s) => {
+    const rangeConfig = TIME_RANGES.find((r) => r.value === timeRange);
+    if (!rangeConfig?.seconds) return s; // "all" - no filtering
+
+    const now = Math.floor(Date.now() / 1000);
+    const cutoff = now - rangeConfig.seconds;
+
+    return {
+      ...s,
+      data: s.data.filter((d) => d.time >= cutoff)
+    };
+  });
+
   useEffect(() => {
     if (!mounted || !containerRef.current) return;
 
     // Check if we have any valid data
-    const validSeries = series
+    const validSeries = filteredSeries
       .map((s) => ({
         ...s,
         data: (s.data || [])
@@ -49,10 +73,7 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
       })
       .filter((s) => s.data.length > 0);
 
-    console.log("Chart validSeries:", validSeries.map(s => ({ id: s.id, label: s.label, dataLen: s.data.length, firstPoint: s.data[0], lastPoint: s.data[s.data.length - 1] })));
-
     if (validSeries.length === 0) {
-      console.log("No valid series data");
       return;
     }
 
@@ -124,7 +145,6 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
             }
 
             if (line && typeof (line as Record<string, unknown>).setData === "function") {
-              console.log(`Setting data for ${s.label}:`, s.data.slice(0, 3), "...", s.data.length, "points");
               (line as { setData: Function }).setData(s.data);
             }
           } catch (seriesErr) {
@@ -167,10 +187,10 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
     return () => {
       if (cleanupFn) cleanupFn();
     };
-  }, [mounted, height, series]);
+  }, [mounted, height, filteredSeries, timeRange]);
 
   if (!mounted) {
-    return <div className="w-full bg-white/5 rounded animate-pulse" style={{ height }} />;
+    return <div className="w-full bg-white/5 rounded animate-pulse" style={{ height: height + 48 }} />;
   }
 
   if (error) {
@@ -182,6 +202,8 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
   }
 
   const hasData = series.some((s) => s.data && s.data.length > 0);
+  const hasFilteredData = filteredSeries.some((s) => s.data && s.data.length > 0);
+
   if (!hasData) {
     return (
       <div className="w-full bg-white/5 rounded flex items-center justify-center text-sm text-muted-foreground" style={{ height }}>
@@ -190,5 +212,43 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
     );
   }
 
-  return <div ref={containerRef} className="w-full rounded bg-white/5" style={{ height }} />;
+  return (
+    <div className="space-y-3">
+      {/* Time range selector */}
+      <div className="flex items-center gap-1 p-1 bg-white/5 rounded-lg w-fit">
+        {TIME_RANGES.map((range) => (
+          <button
+            key={range.value}
+            onClick={() => setTimeRange(range.value)}
+            className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
+              timeRange === range.value
+                ? "bg-blue-500/80 text-white shadow-sm"
+                : "text-muted-foreground hover:text-foreground hover:bg-white/10"
+            }`}
+          >
+            {range.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Chart container */}
+      {hasFilteredData ? (
+        <div ref={containerRef} className="w-full rounded bg-white/5" style={{ height }} />
+      ) : (
+        <div className="w-full bg-white/5 rounded flex items-center justify-center text-sm text-muted-foreground" style={{ height }}>
+          No data for selected time range
+        </div>
+      )}
+
+      {/* Legend */}
+      <div className="flex flex-wrap gap-4 text-sm">
+        {series.map((s) => (
+          <div key={s.id} className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: s.color }} />
+            <span className="text-muted-foreground">{s.label}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
