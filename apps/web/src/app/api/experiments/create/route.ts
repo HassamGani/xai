@@ -5,9 +5,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/server";
 const GROK_API_URL = "https://api.x.ai/v1/chat/completions";
 
 const bodySchema = z.object({
-  question: z.string().min(8),
-  knownOutcome: z.string().optional(),
-  resolvedAt: z.string().datetime().optional()
+  question: z.string().min(8)
 });
 
 export async function POST(request: Request) {
@@ -23,9 +21,9 @@ export async function POST(request: Request) {
     }
 
     const json = await request.json();
-    const { question, knownOutcome, resolvedAt } = bodySchema.parse(json);
+    const { question } = bodySchema.parse(json);
 
-    // Ask Grok to normalize the question and propose outcomes and keywords
+    // Ask Grok to normalize the question, propose outcomes, AND infer resolved outcome/date via web search
     const grokRes = await fetch(GROK_API_URL, {
       method: "POST",
       headers: {
@@ -38,16 +36,23 @@ export async function POST(request: Request) {
           {
             role: "system",
             content:
-              "You help create experiment markets for backtesting. Given a question, propose concise normalized text and 3-6 mutually exclusive outcomes. Return strict JSON."
+              "You help create experiment markets for backtesting resolved questions. Use web search to infer the resolved outcome and resolution date if possible. Return strict JSON only."
           },
           {
             role: "user",
             content: `Question: "${question}"
-Return JSON: { "normalized_question": string, "outcomes": [{ "label": string }] }`
+Return JSON ONLY:
+{
+  "normalized_question": string,
+  "outcomes": [{ "label": string }],
+  "resolved_outcome_label": string | null,
+  "resolved_at": string | null
+}`
           }
         ],
-        temperature: 0.3,
-        max_tokens: 400
+        temperature: 0.2,
+        max_tokens: 500,
+        search: true
       })
     });
 
@@ -62,7 +67,12 @@ Return JSON: { "normalized_question": string, "outcomes": [{ "label": string }] 
       return NextResponse.json({ error: "No Grok content" }, { status: 502 });
     }
 
-    let parsed: { normalized_question: string; outcomes: Array<{ label: string }> };
+    let parsed: {
+      normalized_question: string;
+      outcomes: Array<{ label: string }>;
+      resolved_outcome_label?: string | null;
+      resolved_at?: string | null;
+    };
     try {
       const match = content.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, content];
       parsed = JSON.parse(match[1]);
@@ -81,8 +91,8 @@ Return JSON: { "normalized_question": string, "outcomes": [{ "label": string }] 
         question,
         normalized_question: parsed.normalized_question || question,
         outcomes,
-        resolution_outcome: knownOutcome || null,
-        resolved_at: resolvedAt ? new Date(resolvedAt).toISOString() : null
+        resolution_outcome: parsed.resolved_outcome_label || null,
+        resolved_at: parsed.resolved_at ? new Date(parsed.resolved_at).toISOString() : null
       })
       .select("id, question, normalized_question, outcomes, resolution_outcome, resolved_at")
       .single();

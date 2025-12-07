@@ -21,8 +21,6 @@ type Props = {
 export function ExperimentsPanel({ experiments: initial }: Props) {
   const [experiments, setExperiments] = useState(initial);
   const [question, setQuestion] = useState("");
-  const [knownOutcome, setKnownOutcome] = useState("");
-  const [resolvedAt, setResolvedAt] = useState("");
   const [loading, setLoading] = useState(false);
   const [runLoading, setRunLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -36,8 +34,7 @@ export function ExperimentsPanel({ experiments: initial }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           question,
-          knownOutcome: knownOutcome || undefined,
-          resolvedAt: resolvedAt || undefined
+          // Grok infers resolved outcome + date via search; no manual inputs
         })
       });
       const data = await res.json();
@@ -45,8 +42,6 @@ export function ExperimentsPanel({ experiments: initial }: Props) {
       if (data.experiment) {
         setExperiments((prev) => [data.experiment, ...prev]);
         setQuestion("");
-        setKnownOutcome("");
-        setResolvedAt("");
       }
     } catch (e: any) {
       setError(e.message || "Failed to create experiment");
@@ -85,24 +80,6 @@ export function ExperimentsPanel({ experiments: initial }: Props) {
               onChange={(e) => setQuestion(e.target.value)}
               placeholder='e.g., "Who will win the US 2016 election?"'
             />
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <label className="text-xs text-muted-foreground">Known outcome (label)</label>
-              <Input
-                value={knownOutcome}
-                onChange={(e) => setKnownOutcome(e.target.value)}
-                placeholder='e.g., "Donald Trump"'
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs text-muted-foreground">Resolved at (ISO date)</label>
-              <Input
-                value={resolvedAt}
-                onChange={(e) => setResolvedAt(e.target.value)}
-                placeholder="2016-11-09T06:00:00Z"
-              />
-            </div>
           </div>
           <div className="flex items-center gap-2">
             <Button onClick={createExperiment} disabled={loading || !question.trim()}>
