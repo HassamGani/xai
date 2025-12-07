@@ -87,7 +87,7 @@ export default async function MarketPage({ params }: Props) {
     reason: p.scored.display_labels?.reason,
     // Add relevance score for sorting
     relevance_score: p.scored.scores 
-      ? Math.max(...Object.values(p.scored.scores as Record<string, { relevance: number }>).map(s => s.relevance)) 
+      ? Math.max(...Object.values(p.scored.scores as unknown as Record<string, { relevance: number }>).map(s => s?.relevance ?? 0)) 
       : 0
   }));
 
