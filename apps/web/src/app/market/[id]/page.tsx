@@ -15,7 +15,6 @@ import { AddTickerForm } from "@/components/market/add-ticker-form";
 import { RemoveTickerButton } from "@/components/market/remove-ticker-button";
 import { LivePanel } from "@/components/market/live-panel";
 import { CorrelationInsights } from "@/components/market/correlation-insights";
-import { listMarkets, type MarketRow } from "@/lib/markets";
 
 type Props = {
   params: { id: string };
@@ -91,10 +90,6 @@ export default async function MarketPage({ params }: Props) {
     relevance_score: (p.scored.scores as { relevance?: number } | null)?.relevance ?? 0
   }));
 
-  // Related markets (simple keyword overlap)
-  const allMarkets = await listMarkets();
-  const related = computeRelated(market, allMarkets, 6);
-
   // Find winning outcome label if resolved
   const winningOutcome = market.resolved_outcome_id 
     ? outcomes.find((o) => o.id === market.resolved_outcome_id)
@@ -162,36 +157,6 @@ export default async function MarketPage({ params }: Props) {
         winningOutcomeId={winningOutcome?.id}
       />
 
-      {related.length > 0 && (
-        <div className="space-y-2">
-          <h2 className="text-lg font-semibold">Related markets</h2>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {related.map((m) => (
-              <Link key={m.id} href={`/market/${m.id}`} className="group">
-                <Button
-                  variant="ghost"
-                  className="w-full justify-start h-auto py-3 px-4 border border-border text-left hover:bg-accent/60 whitespace-normal break-words"
-                >
-                  <div className="flex flex-col items-start gap-1">
-                    <span className="text-sm font-medium group-hover:text-primary transition-colors line-clamp-2 break-words">
-                      {m.question}
-                    </span>
-                    {m.normalized_question && (
-                      <span className="text-xs text-muted-foreground line-clamp-1 break-words">
-                        {m.normalized_question}
-                      </span>
-                    )}
-                    <span className="text-xs text-muted-foreground">
-                      {new Date(m.created_at).toLocaleDateString()} · {m.total_posts_processed ?? 0} posts
-                    </span>
-                  </div>
-                </Button>
-              </Link>
-            ))}
-          </div>
-        </div>
-      )}
-
       {showDevDelete && (
         <div className="border border-destructive/30 rounded-lg p-4 space-y-3">
           <p className="text-sm font-medium text-destructive">Developer-only controls</p>
@@ -240,45 +205,4 @@ export default async function MarketPage({ params }: Props) {
       </div>
     </div>
   );
-}
-
-function computeRelated(current: MarketRow | null, markets: MarketRow[], limit: number): MarketRow[] {
-  if (!current) return [];
-  const stop = new Set([
-    "the","a","an","of","and","or","to","in","on","for","with","at","by","from","who","will","what","when","where","why","how","is","are","be","was","were","this","that","these","those","about","question"
-  ]);
-  const normalize = (q: string) =>
-    q
-      .toLowerCase()
-      .split(/\W+/)
-      .filter((w) => w.length > 2 && !stop.has(w));
-
-  const baseTokens = new Set([
-    ...normalize(current.question),
-    ...(current.normalized_question ? normalize(current.normalized_question) : [])
-  ]);
-  if (baseTokens.size === 0) return [];
-
-  const scored: { m: MarketRow; score: number; overlap: number }[] = [];
-
-  for (const m of markets) {
-    if (m.id === current.id) continue;
-    const tokens = new Set([
-      ...normalize(m.question),
-      ...(m.normalized_question ? normalize(m.normalized_question) : [])
-    ]);
-    if (tokens.size === 0) continue;
-    const overlap = [...tokens].filter((t) => baseTokens.has(t));
-    if (overlap.length < 1) continue; // allow at least 1 strong shared token
-    const union = new Set([...tokens, ...baseTokens]).size;
-    const jaccard = overlap.length / union;
-    if (jaccard >= 0.08) {
-      scored.push({ m, score: jaccard, overlap: overlap.length });
-    }
-  }
-
-  return scored
-    .sort((a, b) => b.score - a.score || b.overlap - a.overlap)
-    .slice(0, limit)
-    .map((s) => s.m);
 }

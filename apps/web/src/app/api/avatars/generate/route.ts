@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSupabaseServer } from "@/lib/supabase/server";
+import { getSupabaseAdmin } from "@/lib/supabase/server";
 
 const GROK_API_URL = "https://api.x.ai/v1/chat/completions";
 
@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "API not configured" }, { status: 503 });
     }
 
-    const supabase = getSupabaseServer();
+    const supabase = getSupabaseAdmin();
     if (!supabase) {
       return NextResponse.json({ error: "Database not configured" }, { status: 503 });
     }
@@ -182,7 +182,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ avatars: {} });
     }
 
-    const supabase = getSupabaseServer();
+    const supabase = getSupabaseAdmin();
     if (!supabase) {
       return NextResponse.json({ error: "Database not configured" }, { status: 503 });
     }
