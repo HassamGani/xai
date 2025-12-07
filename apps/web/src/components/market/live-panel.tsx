@@ -49,6 +49,7 @@ function findProb(probs: Record<string, number> | null | undefined, outcomeId: s
 export function LivePanel({ marketId, outcomes, state, snapshots, winningOutcomeId }: Props) {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState({ outcomes, state, snapshots });
+  const [error, setError] = useState<string | null>(null);
 
   // Outcomes with probabilities
   const outcomeProbs = useMemo(() => {
@@ -75,9 +76,13 @@ export function LivePanel({ marketId, outcomes, state, snapshots, winningOutcome
 
   const handleRefresh = async () => {
     setLoading(true);
+    setError(null);
     try {
-      const res = await fetch(`/api/markets/${marketId}/state`, { cache: "no-store" });
-      if (!res.ok) return;
+      const res = await fetch(`/api/markets/${marketId}/state?t=${Date.now()}`, { cache: "no-store" });
+      if (!res.ok) {
+        setError("Failed to refresh");
+        return;
+      }
       const json = await res.json();
       setData({
         outcomes: json.outcomes ?? [],
@@ -104,15 +109,21 @@ export function LivePanel({ marketId, outcomes, state, snapshots, winningOutcome
         <Button variant="ghost" size="sm" onClick={handleRefresh} disabled={loading}>
           {loading ? "Refreshing..." : "Refresh"}
         </Button>
-        { (data.state?.updated_at || data.snapshots?.at?.(-1)?.timestamp) && (
-          <span className="text-xs text-muted-foreground">
-            Last updated{" "}
-            {new Date(
-              (data.state?.updated_at as string) || (data.snapshots?.at?.(-1)?.timestamp as string)
-            ).toLocaleString()}
-          </span>
-        )}
+        {(() => {
+          const times: string[] = [];
+          if (data.state?.updated_at) times.push(data.state.updated_at as string);
+          const lastSnap = data.snapshots?.[data.snapshots.length - 1]?.timestamp as string | undefined;
+          if (lastSnap) times.push(lastSnap);
+          if (times.length === 0) return null;
+          const latest = times.reduce((a, b) => (new Date(b).getTime() > new Date(a).getTime() ? b : a), times[0]);
+          return (
+            <span className="text-xs text-muted-foreground">
+              Last updated {new Date(latest).toLocaleString()}
+            </span>
+          );
+        })()}
       </div>
+      {error && <p className="text-xs text-destructive">{error}</p>}
       <OutcomeCards
         outcomes={outcomeProbs}
         updatedAt={(data.state?.updated_at as string) || (data.snapshots?.at?.(-1)?.timestamp as string)}
