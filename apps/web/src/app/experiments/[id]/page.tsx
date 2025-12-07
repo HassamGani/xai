@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
 import { ProbabilityChart } from "@/components/market/probability-chart";
+import { RunExperimentButton } from "@/components/experiments/run-experiment-button";
 
 export const dynamic = "force-dynamic";
 
@@ -68,15 +69,23 @@ export default async function ExperimentPage({ params }: { params: { id: string 
           {exp.resolved_at ? new Date(exp.resolved_at).toLocaleString() : "—"}
         </p>
         {lastRun && (
-          <p className="text-xs text-muted-foreground">
-            Last run: {lastRun.status} • Started {new Date(lastRun.started_at).toLocaleString()}
-            {lastRun.finished_at ? ` • Finished ${new Date(lastRun.finished_at).toLocaleString()}` : ""}
-          </p>
+          <div className="space-y-1 text-xs text-muted-foreground">
+            <p>
+              Last run: {lastRun.status} • Started {new Date(lastRun.started_at).toLocaleString()}
+              {lastRun.finished_at ? ` • Finished ${new Date(lastRun.finished_at).toLocaleString()}` : ""}
+            </p>
+            {lastRun.error && (
+              <p className="text-destructive">Error: {lastRun.error}</p>
+            )}
+          </div>
         )}
       </div>
 
       <div className="rounded-2xl border border-border bg-card/70 p-4 shadow-sm">
-        <h3 className="text-sm font-semibold mb-2">Probability timeline</h3>
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-sm font-semibold">Probability timeline</h3>
+          <RunExperimentButton experimentId={exp.id} />
+        </div>
         {series.every((s) => s.data.length === 0) ? (
           <p className="text-sm text-muted-foreground">No snapshots yet. Run the experiment to generate.</p>
         ) : (
