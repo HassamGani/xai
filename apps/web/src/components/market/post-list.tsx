@@ -139,6 +139,7 @@ export function PostList({ marketId, posts, emptyMessage = "No curated posts yet
   const [hasMore, setHasMore] = useState(true);
   const [avatars, setAvatars] = useState<Record<string, string>>({});
   const [loadingAvatars, setLoadingAvatars] = useState<Set<string>>(new Set());
+  const [error, setError] = useState<string | null>(null);
 
   // Fetch existing avatars on mount or data change
   useEffect(() => {
@@ -162,11 +163,20 @@ export function PostList({ marketId, posts, emptyMessage = "No curated posts yet
     setHasMore(true);
   }, [posts]);
 
+  // Initial refresh on mount for freshest posts
+  useEffect(() => {
+    handleRefresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const fetchPosts = async (newOffset: number, replace = false) => {
     const limit = 20;
     const url = `/api/markets/${marketId}/posts?limit=${limit}&offset=${newOffset}`;
     const res = await fetch(url);
-    if (!res.ok) return;
+    if (!res.ok) {
+      setError("Failed to load posts");
+      return;
+    }
     const json = await res.json();
     const fetched: Post[] = json.posts || [];
     if (replace) {
@@ -182,6 +192,7 @@ export function PostList({ marketId, posts, emptyMessage = "No curated posts yet
 
   const handleRefresh = async () => {
     setLoading(true);
+    setError(null);
     try {
       await fetchPosts(0, true);
     } finally {
@@ -263,6 +274,7 @@ export function PostList({ marketId, posts, emptyMessage = "No curated posts yet
           {loading ? "Refreshing..." : "Refresh"}
         </Button>
       </div>
+      {error && <p className="text-xs text-destructive">{error}</p>}
 
       <div className="space-y-3">
         {sortedPosts.map((p) => {
