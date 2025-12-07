@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 
 type Series = {
   id: string;
@@ -16,6 +16,11 @@ type Props = {
 
 type TimeRange = "1d" | "1w" | "1m" | "all";
 
+type HoverData = {
+  time: string;
+  values: { label: string; color: string; value: number }[];
+} | null;
+
 const TIME_RANGES: { value: TimeRange; label: string; seconds: number | null }[] = [
   { value: "1d", label: "1D", seconds: 24 * 60 * 60 },
   { value: "1w", label: "1W", seconds: 7 * 24 * 60 * 60 },
@@ -26,9 +31,11 @@ const TIME_RANGES: { value: TimeRange; label: string; seconds: number | null }[]
 export function ProbabilityChart({ series, height = 320 }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<unknown>(null);
+  const seriesMapRef = useRef<Map<string, unknown>>(new Map());
   const [error, setError] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
   const [timeRange, setTimeRange] = useState<TimeRange>("all");
+  const [hoverData, setHoverData] = useState<HoverData>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -47,6 +54,39 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
       data: s.data.filter((d) => d.time >= cutoff)
     };
   });
+
+  const handleCrosshairMove = useCallback((param: unknown) => {
+    const p = param as { time?: number; seriesData?: Map<unknown, { value?: number }> };
+    
+    if (!p.time || !p.seriesData) {
+      setHoverData(null);
+      return;
+    }
+
+    const time = new Date(p.time * 1000).toLocaleString();
+    const values: { label: string; color: string; value: number }[] = [];
+
+    // Get values from each series
+    for (const s of series) {
+      const seriesRef = seriesMapRef.current.get(s.id);
+      if (seriesRef) {
+        const data = p.seriesData.get(seriesRef);
+        if (data && typeof data.value === "number") {
+          values.push({
+            label: s.label,
+            color: s.color,
+            value: data.value
+          });
+        }
+      }
+    }
+
+    if (values.length > 0) {
+      setHoverData({ time, values });
+    } else {
+      setHoverData(null);
+    }
+  }, [series]);
 
   useEffect(() => {
     if (!mounted || !containerRef.current) return;
@@ -108,40 +148,39 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
             secondsVisible: false
           },
           crosshair: {
-            mode: 0, // Normal mode - crosshair moves freely
+            mode: 0,
             vertLine: {
               width: 1,
-              color: "rgba(255,255,255,0.3)",
-              style: 2, // Dashed
-              labelBackgroundColor: "rgba(59, 130, 246, 0.8)"
+              color: "rgba(255,255,255,0.4)",
+              style: 0,
+              labelBackgroundColor: "rgba(59, 130, 246, 0.9)"
             },
             horzLine: {
-              width: 1,
-              color: "rgba(255,255,255,0.3)",
-              style: 2,
-              labelBackgroundColor: "rgba(59, 130, 246, 0.8)"
+              visible: false // Hide horizontal line since we show all values in tooltip
             }
           }
         });
         chartRef.current = chart;
+        seriesMapRef.current.clear();
 
         const chartAny = chart as unknown as Record<string, unknown>;
 
         for (const s of validSeries) {
           try {
-            let line: unknown;
-
             const seriesOpts = {
               color: s.color,
               lineWidth: 2,
               title: s.label,
-              lastValueVisible: true,
+              lastValueVisible: false, // Hide last value labels on right
               priceLineVisible: false,
               crosshairMarkerVisible: true,
-              crosshairMarkerRadius: 5,
+              crosshairMarkerRadius: 6,
+              crosshairMarkerBorderWidth: 2,
               crosshairMarkerBorderColor: s.color,
-              crosshairMarkerBackgroundColor: "#fff"
+              crosshairMarkerBackgroundColor: "#1e293b"
             };
+
+            let line: unknown;
 
             // Try v4 style first (addLineSeries)
             if (typeof chartAny.addLineSeries === "function") {
@@ -161,10 +200,16 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
 
             if (line && typeof (line as Record<string, unknown>).setData === "function") {
               (line as { setData: Function }).setData(s.data);
+              seriesMapRef.current.set(s.id, line);
             }
           } catch (seriesErr) {
             console.error(`Error adding series ${s.label}:`, seriesErr);
           }
+        }
+
+        // Subscribe to crosshair move
+        if (chart && typeof (chart as Record<string, unknown>).subscribeCrosshairMove === "function") {
+          (chart as { subscribeCrosshairMove: Function }).subscribeCrosshairMove(handleCrosshairMove);
         }
 
         if (chart && typeof (chart as Record<string, unknown>).timeScale === "function") {
@@ -182,14 +227,20 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
 
         cleanupFn = () => {
           window.removeEventListener("resize", handleResize);
-          if (chartRef.current && typeof (chartRef.current as Record<string, unknown>).remove === "function") {
-            try {
-              (chartRef.current as { remove: Function }).remove();
-            } catch (e) {
-              // ignore
+          if (chartRef.current) {
+            if (typeof (chartRef.current as Record<string, unknown>).unsubscribeCrosshairMove === "function") {
+              (chartRef.current as { unsubscribeCrosshairMove: Function }).unsubscribeCrosshairMove(handleCrosshairMove);
+            }
+            if (typeof (chartRef.current as Record<string, unknown>).remove === "function") {
+              try {
+                (chartRef.current as { remove: Function }).remove();
+              } catch (e) {
+                // ignore
+              }
             }
           }
           chartRef.current = null;
+          seriesMapRef.current.clear();
         };
       } catch (err) {
         console.error("Chart init error:", err);
@@ -202,7 +253,7 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
     return () => {
       if (cleanupFn) cleanupFn();
     };
-  }, [mounted, height, filteredSeries, timeRange]);
+  }, [mounted, height, filteredSeries, timeRange, handleCrosshairMove]);
 
   if (!mounted) {
     return <div className="w-full bg-white/5 rounded animate-pulse" style={{ height: height + 48 }} />;
@@ -227,42 +278,68 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
     );
   }
 
+  // Get latest values for legend when not hovering
+  const latestValues = series.map((s) => {
+    const lastPoint = s.data[s.data.length - 1];
+    return {
+      label: s.label,
+      color: s.color,
+      value: lastPoint?.value ?? 0
+    };
+  });
+
+  const displayValues = hoverData?.values ?? latestValues;
+
   return (
     <div className="space-y-3">
       {/* Time range selector */}
-      <div className="flex items-center gap-1 p-1 bg-white/5 rounded-lg w-fit">
-        {TIME_RANGES.map((range) => (
-          <button
-            key={range.value}
-            onClick={() => setTimeRange(range.value)}
-            className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
-              timeRange === range.value
-                ? "bg-blue-500/80 text-white shadow-sm"
-                : "text-muted-foreground hover:text-foreground hover:bg-white/10"
-            }`}
-          >
-            {range.label}
-          </button>
-        ))}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-1 p-1 bg-white/5 rounded-lg">
+          {TIME_RANGES.map((range) => (
+            <button
+              key={range.value}
+              onClick={() => setTimeRange(range.value)}
+              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
+                timeRange === range.value
+                  ? "bg-blue-500/80 text-white shadow-sm"
+                  : "text-muted-foreground hover:text-foreground hover:bg-white/10"
+              }`}
+            >
+              {range.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Live values display */}
+        <div className="flex items-center gap-4 text-sm">
+          {displayValues.map((v) => (
+            <div key={v.label} className="flex items-center gap-2">
+              <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: v.color }} />
+              <span className="text-muted-foreground">{v.label}:</span>
+              <span className="font-semibold tabular-nums" style={{ color: v.color }}>
+                {(v.value * 100).toFixed(1)}%
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Chart container */}
-      {hasFilteredData ? (
-        <div ref={containerRef} className="w-full rounded bg-white/5" style={{ height }} />
-      ) : (
-        <div className="w-full bg-white/5 rounded flex items-center justify-center text-sm text-muted-foreground" style={{ height }}>
-          No data for selected time range
-        </div>
-      )}
-
-      {/* Legend */}
-      <div className="flex flex-wrap gap-4 text-sm">
-        {series.map((s) => (
-          <div key={s.id} className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: s.color }} />
-            <span className="text-muted-foreground">{s.label}</span>
+      <div className="relative">
+        {hasFilteredData ? (
+          <div ref={containerRef} className="w-full rounded bg-white/5" style={{ height }} />
+        ) : (
+          <div className="w-full bg-white/5 rounded flex items-center justify-center text-sm text-muted-foreground" style={{ height }}>
+            No data for selected time range
           </div>
-        ))}
+        )}
+
+        {/* Hover timestamp */}
+        {hoverData && (
+          <div className="absolute top-2 left-2 text-xs text-muted-foreground bg-black/50 px-2 py-1 rounded backdrop-blur-sm">
+            {hoverData.time}
+          </div>
+        )}
       </div>
     </div>
   );
