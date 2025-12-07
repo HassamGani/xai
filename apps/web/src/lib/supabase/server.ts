@@ -5,14 +5,13 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
  * Accepts both NEXT_PUBLIC_* (preferred) and plain SUPABASE_* fallbacks.
  */
 export function getSupabaseServer(): SupabaseClient | null {
-  const supabaseUrl =
-    process.env.NEXT_PUBLIC_SUPABASE_URL ??
-    process.env.SUPABASE_URL ??
-    process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
-  const supabaseAnonKey =
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
-    process.env.SUPABASE_ANON_KEY ??
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
+  const supabaseUrlRaw =
+    process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? undefined;
+  const supabaseAnonKeyRaw =
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? process.env.SUPABASE_ANON_KEY ?? undefined;
+
+  const supabaseUrl = supabaseUrlRaw ? supabaseUrlRaw.trim() : undefined;
+  const supabaseAnonKey = supabaseAnonKeyRaw ? supabaseAnonKeyRaw.trim() : undefined;
 
   if (!supabaseUrl || !supabaseAnonKey) return null;
   return createClient(supabaseUrl, supabaseAnonKey, { auth: { persistSession: false } });
