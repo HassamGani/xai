@@ -1,4 +1,4 @@
-import { supabaseServer } from "./supabase/server";
+import { getSupabaseServer } from "./supabase/server";
 
 export type MarketRow = {
   id: string;
@@ -64,25 +64,33 @@ export type RawPostRow = {
 };
 
 export async function listMarkets() {
-  const { data, error } = await supabaseServer
-    .from("markets")
-    .select("*")
-    .order("created_at", { ascending: false });
+  const supabase = getSupabaseServer();
+  if (!supabase) return [];
+  const { data, error } = await supabase.from("markets").select("*").order("created_at", { ascending: false });
 
   if (error) throw error;
   return (data ?? []) as MarketRow[];
 }
 
 export async function getMarket(marketId: string) {
+  const supabase = getSupabaseServer();
+  if (!supabase) {
+    return {
+      market: null,
+      outcomes: [],
+      state: null,
+      snapshots: []
+    };
+  }
   const [marketRes, outcomesRes, stateRes, snapshotsRes] = await Promise.all([
-    supabaseServer.from("markets").select("*").eq("id", marketId).single(),
-    supabaseServer
+    supabase.from("markets").select("*").eq("id", marketId).single(),
+    supabase
       .from("outcomes")
       .select("*")
       .eq("market_id", marketId)
       .order("label", { ascending: true }),
-    supabaseServer.from("market_state").select("*").eq("market_id", marketId).single(),
-    supabaseServer
+    supabase.from("market_state").select("*").eq("market_id", marketId).single(),
+    supabase
       .from("probability_snapshots")
       .select("*")
       .eq("market_id", marketId)
@@ -104,7 +112,10 @@ export async function getMarket(marketId: string) {
 }
 
 export async function getMarketPosts(marketId: string, limit = 20) {
-  const scoredRes = await supabaseServer
+  const supabase = getSupabaseServer();
+  if (!supabase) return [];
+
+  const scoredRes = await supabase
     .from("scored_posts")
     .select("*")
     .eq("market_id", marketId)
@@ -114,7 +125,7 @@ export async function getMarketPosts(marketId: string, limit = 20) {
   if (scoredRes.error) throw scoredRes.error;
 
   const rawIds = Array.from(new Set((scoredRes.data ?? []).map((p) => p.raw_post_id)));
-  const rawRes = await supabaseServer.from("raw_posts").select("*").in("id", rawIds);
+  const rawRes = await supabase.from("raw_posts").select("*").in("id", rawIds);
   if (rawRes.error) throw rawRes.error;
 
   const rawMap = new Map<string, RawPostRow>();

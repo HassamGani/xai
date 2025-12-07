@@ -1,9 +1,13 @@
+export const dynamic = "force-dynamic";
+
 import Link from "next/link";
 import { listMarkets } from "@/lib/markets";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default async function HomePage() {
   const markets = await listMarkets();
+
+  const supabaseMissing = markets.length === 0;
 
   return (
     <div className="space-y-6">
@@ -12,6 +16,11 @@ export default async function HomePage() {
         <p className="text-sm text-muted-foreground">
           Probabilities are derived from X posts scored by Grok. Click a market to view details.
         </p>
+        {supabaseMissing ? (
+          <p className="mt-2 text-xs text-destructive">
+            Supabase env vars not detected; showing empty list until configured.
+          </p>
+        ) : null}
       </div>
       <div className="grid gap-4 md:grid-cols-2">
         {markets.map((m) => (

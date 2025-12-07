@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { notFound } from "next/navigation";
 import { getMarket, getMarketPosts } from "@/lib/markets";
 import { OutcomeCards } from "@/components/market/outcome-cards";
