@@ -65,8 +65,8 @@ export async function POST(req: NextRequest) {
       const movers = await getTopMovers(supabase, { windowDays, limit });
       context.markets = movers.map((m) => ({
         id: m.market_id,
-        question: m.question,
-        normalized_question: m.normalized_question,
+        question: m.question ?? "Unknown",
+        normalized_question: m.normalized_question ?? null,
         delta: m.delta,
         top_outcome: m.top_outcome
       }));
