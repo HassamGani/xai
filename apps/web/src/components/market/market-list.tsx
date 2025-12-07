@@ -57,7 +57,6 @@ export function MarketList({ markets }: Props) {
         return;
       }
 
-      // Navigate to the market (whether existing or new)
       startTransition(() => {
         router.push(`/market/${data.marketId}`);
         router.refresh();
@@ -84,7 +83,7 @@ export function MarketList({ markets }: Props) {
             setError(null);
           }}
           placeholder="Search markets or ask a new question..."
-          className="w-full rounded-xl border border-white/15 bg-white/5 px-4 py-3 pl-11 text-sm placeholder:text-muted-foreground focus:border-blue-500/50 focus:outline-none focus:ring-2 focus:ring-blue-500/20 backdrop-blur-sm transition"
+          className="w-full h-11 rounded-lg border border-input bg-background px-4 pl-10 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
           onKeyDown={(e) => {
             if (e.key === "Enter" && showCreateOption && !isCreating) {
               handleCreateMarket();
@@ -92,7 +91,7 @@ export function MarketList({ markets }: Props) {
           }}
         />
         <svg
-          className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"
+          className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -110,7 +109,7 @@ export function MarketList({ markets }: Props) {
               setSearch("");
               setError(null);
             }}
-            className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition"
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
           >
             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -119,98 +118,76 @@ export function MarketList({ markets }: Props) {
         )}
       </div>
 
-      {/* Results count or create prompt */}
+      {/* Results count */}
       {search && !showCreateOption && (
         <p className="text-xs text-muted-foreground">
           {filtered.length} market{filtered.length !== 1 ? "s" : ""} found
         </p>
       )}
 
-      {/* Error message */}
+      {/* Error */}
       {error && (
-        <div className="rounded-lg bg-red-500/10 border border-red-500/30 px-4 py-3 text-sm text-red-400">
+        <div className="rounded-lg bg-destructive/10 border border-destructive/30 px-4 py-3 text-sm text-destructive">
           {error}
         </div>
       )}
 
-      {/* Market grid */}
-      <div className="grid gap-4 md:grid-cols-2">
+      {/* Markets grid */}
+      <div className="grid gap-3 md:grid-cols-2">
         {filtered.map((m) => (
           <Link key={m.id} href={`/market/${m.id}`} className="group">
-            <Card className="h-full transition hover:border-primary/60 hover:bg-white/10">
+            <Card className="h-full transition-colors hover:bg-accent/50">
               <CardHeader>
-                <CardTitle className="line-clamp-2">{m.question}</CardTitle>
+                <CardTitle className="line-clamp-2 group-hover:text-primary transition-colors">
+                  {m.question}
+                </CardTitle>
                 <CardDescription>
-                  Created {new Date(m.created_at).toLocaleString()} • Posts{" "}
-                  {m.total_posts_processed ?? 0}
+                  {new Date(m.created_at).toLocaleDateString()} · {m.total_posts_processed ?? 0} posts
                 </CardDescription>
               </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground line-clamp-1">
-                  Normalized: {m.normalized_question ?? "n/a"}
-                </p>
-              </CardContent>
+              {m.normalized_question && (
+                <CardContent>
+                  <p className="text-sm text-muted-foreground line-clamp-1">
+                    {m.normalized_question}
+                  </p>
+                </CardContent>
+              )}
             </Card>
           </Link>
         ))}
       </div>
 
-      {/* No results - Create market prompt */}
+      {/* Create market prompt */}
       {filtered.length === 0 && (
-        <div className="glass-strong rounded-2xl border border-white/15 px-6 py-8 text-center space-y-4">
+        <Card className="p-6 text-center">
           {search.trim().length < 10 ? (
-            <>
-              <div className="text-4xl">🔮</div>
+            <div className="space-y-2">
               <p className="text-muted-foreground">
                 {search ? `No markets matching "${search}"` : "No markets found."}
               </p>
               <p className="text-sm text-muted-foreground">
-                Enter a detailed question (10+ characters) to create a new prediction market
+                Enter a detailed question (10+ chars) to create a new market
               </p>
-            </>
+            </div>
           ) : (
-            <>
-              <div className="text-4xl">🎯</div>
-              <p className="text-lg font-medium">No existing market found</p>
-              <p className="text-muted-foreground max-w-md mx-auto">
-                Would you like to create a prediction market for:
+            <div className="space-y-4">
+              <p className="font-medium">No existing market found</p>
+              <p className="text-muted-foreground">
+                Create a prediction market for:
               </p>
-              <p className="text-lg font-medium text-blue-400">"{search}"</p>
-              <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-                Grok AI will analyze your question, generate outcomes, and set up X stream rules to track relevant posts.
-              </p>
+              <p className="font-medium text-primary">"{search}"</p>
               <Button
                 onClick={handleCreateMarket}
                 disabled={isCreating || isPending}
-                className="mt-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
               >
-                {isCreating || isPending ? (
-                  <>
-                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                      />
-                    </svg>
-                    Creating Market...
-                  </>
-                ) : (
-                  <>
-                    <svg className="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                    </svg>
-                    Create Prediction Market
-                  </>
-                )}
+                {isCreating || isPending ? "Creating..." : "Create Market"}
               </Button>
               <p className="text-xs text-muted-foreground">
-                Press <kbd className="px-1.5 py-0.5 rounded bg-white/10 text-xs">Enter</kbd> to create
+                Press Enter to create
               </p>
-            </>
+            </div>
           )}
-        </div>
+        </Card>
       )}
     </div>
   );

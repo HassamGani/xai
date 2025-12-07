@@ -10,14 +10,14 @@ export default async function HomePage() {
 
   return (
     <div className="space-y-6">
-      <div className="glass-strong rounded-2xl border border-white/12 px-6 py-5">
-        <h2 className="text-xl font-semibold">Markets</h2>
+      <div className="space-y-1">
+        <h2 className="text-lg font-semibold">Markets</h2>
         <p className="text-sm text-muted-foreground">
-          Probabilities are derived from X posts scored by Grok. Click a market to view details.
+          Probabilities derived from X posts scored by Grok
         </p>
         {supabaseMissing && (
-          <p className="mt-2 text-xs text-destructive">
-            Supabase env vars not detected; showing empty list until configured.
+          <p className="text-xs text-destructive">
+            Database not configured or no markets found
           </p>
         )}
       </div>

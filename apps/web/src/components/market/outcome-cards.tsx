@@ -15,35 +15,36 @@ function formatPct(p: number) {
   return `${(p * 100).toFixed(1)}%`;
 }
 
-// Color based on probability - higher = more green, lower = more red
 function getProbColor(p: number) {
-  if (p >= 0.5) return "text-emerald-400";
-  if (p >= 0.3) return "text-amber-400";
-  return "text-rose-400";
+  if (p >= 0.5) return "text-emerald-600 dark:text-emerald-400";
+  if (p >= 0.3) return "text-amber-600 dark:text-amber-400";
+  return "text-rose-600 dark:text-rose-400";
 }
 
 export function OutcomeCards({ outcomes, updatedAt }: Props) {
-  // Sort by probability descending
   const sorted = [...outcomes].sort((a, b) => b.probability - a.probability);
 
   return (
     <div className="space-y-3">
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {sorted.map((o, idx) => (
-          <Card key={o.id} className="border border-white/15 bg-white/5 relative overflow-hidden">
-            {/* Background bar showing probability */}
-            <div 
-              className="absolute inset-0 bg-gradient-to-r from-blue-500/20 to-transparent" 
+          <Card key={o.id} className="relative overflow-hidden">
+            <div
+              className="absolute inset-0 bg-primary/5"
               style={{ width: `${Math.max(o.probability * 100, 5)}%` }}
             />
             <CardHeader className="relative pb-2">
-              <CardTitle className="text-base flex items-center gap-2">
-                {idx === 0 && <span className="text-xs bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded">Leading</span>}
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                {idx === 0 && (
+                  <span className="text-[10px] bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.5 rounded font-medium">
+                    Leading
+                  </span>
+                )}
                 {o.label}
               </CardTitle>
             </CardHeader>
-            <CardContent className="relative">
-              <div className={`text-4xl font-bold ${getProbColor(o.probability)}`}>
+            <CardContent className="relative pt-0">
+              <div className={`text-3xl font-bold tabular-nums ${getProbColor(o.probability)}`}>
                 {formatPct(o.probability)}
               </div>
             </CardContent>

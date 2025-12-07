@@ -27,3 +27,4 @@ supabase/.cache/
 data/
 tmp/
 
+.vercel
