@@ -14,8 +14,8 @@ export type MarketProbabilitySnapshot = {
 
 export type MarketMover = {
   market_id: string;
-  question: string;
-  normalized_question: string | null;
+  question?: string;
+  normalized_question?: string | null;
   delta: number;
   from: number;
   to: number;
