@@ -13,7 +13,7 @@ const envSchema = z.object({
 const env = envSchema.parse(process.env);
 
 // Simple in-memory caches for author lookups to avoid repeat hits
-const userCache = new Map<string, { username: string | null; avatar: string | null }>();
+const userCache = new Map<string, { username: string | null; avatar: string | null; followers: number | null }>();
 const avatarWritten = new Set<string>();
 
 // Initialize Supabase client
@@ -267,16 +267,18 @@ async function processTweet(
       continue;
     }
 
-    // Map author username from expansions (if available)
+    // Map author data from expansions (if available)
     const userExpansion = expansions?.users?.find((u) => u.id === tweet.author_id);
     let authorUsername = userExpansion?.username ?? null;
     let authorAvatarUrl = userExpansion?.profile_image_url ?? null;
+    let authorFollowers = userExpansion?.public_metrics?.followers_count ?? null;
 
-    // If expansions didn't include username/avatar, fetch once from X and cache
-    if (!authorUsername || !authorAvatarUrl) {
+    // If expansions didn't include username/avatar/followers, fetch once from X and cache
+    if (!authorUsername || !authorAvatarUrl || authorFollowers == null) {
       const profile = await fetchUserProfile(tweet.author_id);
       authorUsername = authorUsername || profile?.username || null;
       authorAvatarUrl = authorAvatarUrl || profile?.avatar || null;
+      authorFollowers = authorFollowers ?? profile?.followers ?? null;
     }
 
     // Persist avatar URL (from X) into author_avatars so UI can use it immediately
@@ -294,6 +296,7 @@ async function processTweet(
         text: tweet.text,
         author_id: tweet.author_id,
         author_username: authorUsername,
+        author_followers: authorFollowers,
         post_created_at: tweet.created_at,
         metrics: tweet.public_metrics || {},
         is_retweet: isRetweet,
@@ -543,26 +546,40 @@ function sleep(ms: number): Promise<void> {
 async function fetchUserProfile(authorId: string): Promise<{ username: string | null; avatar: string | null } | null> {
   if (userCache.has(authorId)) return userCache.get(authorId) || null;
 
-  try {
-    const res = await fetch(`${X_API_BASE}/users/${authorId}?user.fields=username,profile_image_url`, {
-      headers: { Authorization: `Bearer ${env.X_BEARER_TOKEN}` },
-    });
+  const url = `${X_API_BASE}/users/${authorId}?user.fields=username,profile_image_url,public_metrics`;
+  let attempt = 0;
+  while (attempt < 4) {
+    attempt++;
+    try {
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${env.X_BEARER_TOKEN}` },
+      });
 
-    if (!res.ok) {
-      log("WARN", "Failed to fetch user profile", { authorId, status: res.status });
-      return null;
+      if (res.status === 429) {
+        const wait = 600 * attempt;
+        log("WARN", "Rate limited fetching profile, retrying", { authorId, attempt, wait });
+        await sleep(wait);
+        continue;
+      }
+
+      if (!res.ok) {
+        log("WARN", "Failed to fetch user profile", { authorId, status: res.status });
+        return null;
+      }
+
+      const data = await res.json();
+      const username = data?.data?.username || null;
+      const avatar = data?.data?.profile_image_url || null;
+      const followers = data?.data?.public_metrics?.followers_count ?? null;
+      const profile = { username, avatar, followers };
+      userCache.set(authorId, profile);
+      return profile;
+    } catch (error) {
+      log("WARN", "User profile lookup error", { authorId, error: String(error), attempt });
+      await sleep(400 * attempt);
     }
-
-    const data = await res.json();
-    const username = data?.data?.username || null;
-    const avatar = data?.data?.profile_image_url || null;
-    const profile = { username, avatar };
-    userCache.set(authorId, profile);
-    return profile;
-  } catch (error) {
-    log("WARN", "User profile lookup error", { authorId, error: String(error) });
-    return null;
   }
+  return null;
 }
 
 // Upsert avatar into Supabase (author_avatars), storing the URL we got from X
