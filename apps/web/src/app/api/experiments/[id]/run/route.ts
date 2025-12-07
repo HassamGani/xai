@@ -126,6 +126,8 @@ Return JSON ONLY:
       created_at: string;
       public_metrics?: { like_count?: number; retweet_count?: number; reply_count?: number; quote_count?: number };
     }>;
+    // Cap posts to avoid timeouts
+    const limitedPosts = posts.slice(0, 150);
     const users = new Map(
       ((searchJson.includes?.users || []) as Array<{ id: string; username?: string; public_metrics?: { followers_count?: number } }>)
         .map((u) => [u.id, u])
@@ -139,7 +141,7 @@ Return JSON ONLY:
       display_labels?: any;
     }> = [];
 
-    for (const post of posts) {
+    for (const post of limitedPosts) {
       const author = users.get(post.author_id);
       const scoreRes = await fetch(GROK_API_URL, {
         method: "POST",
@@ -170,9 +172,14 @@ Tweet by @${author?.username || post.author_id}:
       });
 
       if (!scoreRes.ok) continue;
-      const scoreJson = await scoreRes.json();
+      let scoreJson: any = null;
+      try {
+        scoreJson = await scoreRes.json();
+      } catch {
+        continue;
+      }
       const content = scoreJson.choices?.[0]?.message?.content;
-      if (!content) continue;
+      if (!content || typeof content !== "string") continue;
       try {
         const match = content.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, content];
         const parsed = JSON.parse(match[1]);
@@ -267,7 +274,7 @@ Tweet by @${author?.username || post.author_id}:
     // Finalize run
     await supabase
       .from("experiment_runs")
-      .update({ status: "finished", finished_at: new Date().toISOString(), post_count: 0 })
+      .update({ status: "finished", finished_at: new Date().toISOString(), post_count: scoredRows.length })
       .eq("id", runId);
 
     return NextResponse.json({
