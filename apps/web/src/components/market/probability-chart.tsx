@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import { useTheme } from "next-themes";
 
 type Series = {
@@ -30,26 +30,21 @@ const CHART_COLORS = {
   light: {
     text: "#64748b",
     gridLines: "#e2e8f0",
-    crosshair: "#94a3b8",
-    crosshairLabel: "#3b82f6"
+    crosshair: "#94a3b8"
   },
   dark: {
     text: "#94a3b8",
-    gridLines: "#1e293b",
-    crosshair: "#475569",
-    crosshairLabel: "#3b82f6"
+    gridLines: "#334155",
+    crosshair: "#64748b"
   }
 };
 
-type TooltipState = {
-  cursorX: number | null;
-  items: Array<{
-    id: string;
-    y: number;
-    label: string;
-    color: string;
-    value: number;
-  }>;
+type TooltipItem = {
+  id: string;
+  y: number;
+  label: string;
+  color: string;
+  value: number;
 };
 
 export function ProbabilityChart({ series, height = 320 }: Props) {
@@ -61,8 +56,10 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
   const [timeRange, setTimeRange] = useState<TimeRange>("all");
   const { resolvedTheme } = useTheme();
   
-  // Single state object for tooltips to avoid race conditions
-  const [tooltipState, setTooltipState] = useState<TooltipState>({ cursorX: null, items: [] });
+  // Separate state for cursor position and tooltip data
+  const [isHovering, setIsHovering] = useState(false);
+  const [cursorX, setCursorX] = useState<number>(0);
+  const [tooltipItems, setTooltipItems] = useState<TooltipItem[]>([]);
 
   const isDark = resolvedTheme === "dark";
   const colors = isDark ? CHART_COLORS.dark : CHART_COLORS.light;
@@ -71,23 +68,31 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
     setMounted(true);
   }, []);
 
-  // Filter series by time range
-  const filteredSeries = series.map((s) => {
-    const rangeConfig = TIME_RANGES.find((r) => r.value === timeRange);
-    if (!rangeConfig?.seconds) return s;
-    const now = Math.floor(Date.now() / 1000);
-    const cutoff = now - rangeConfig.seconds;
-    return { ...s, data: s.data.filter((d) => d.time >= cutoff) };
-  });
+  // Memoize filtered series to prevent unnecessary recalculations
+  const filteredSeries = useMemo(() => {
+    return series.map((s) => {
+      const rangeConfig = TIME_RANGES.find((r) => r.value === timeRange);
+      if (!rangeConfig?.seconds) return s;
+      const now = Math.floor(Date.now() / 1000);
+      const cutoff = now - rangeConfig.seconds;
+      return { ...s, data: s.data.filter((d) => d.time >= cutoff) };
+    });
+  }, [series, timeRange]);
 
-  // Store in ref for callbacks
-  const dataRef = useRef({ filteredSeries, height });
-  dataRef.current = { filteredSeries, height };
+  // Serialize for dependency comparison
+  const seriesKey = useMemo(() => {
+    return JSON.stringify(filteredSeries.map(s => ({ id: s.id, len: s.data.length })));
+  }, [filteredSeries]);
+
+  // Store current data in ref for callbacks
+  const dataRef = useRef({ filteredSeries, height, colors, isDark });
+  dataRef.current = { filteredSeries, height, colors, isDark };
 
   useEffect(() => {
     if (!mounted || !containerRef.current) return;
 
-    const validSeries = filteredSeries
+    const currentSeries = dataRef.current.filteredSeries;
+    const validSeries = currentSeries
       .map((s) => ({
         ...s,
         data: (s.data || [])
@@ -118,21 +123,23 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
         chartRef.current = null;
         seriesMapRef.current.clear();
 
+        const { colors: chartColors, isDark: dark } = dataRef.current;
+
         const chart = createChart(containerRef.current, {
           width: containerRef.current.clientWidth,
           height,
           layout: {
             background: { type: ColorType.Solid, color: "transparent" },
-            textColor: colors.text
+            textColor: chartColors.text
           },
           grid: {
-            vertLines: { color: colors.gridLines },
-            horzLines: { color: colors.gridLines }
+            vertLines: { color: chartColors.gridLines },
+            horzLines: { color: chartColors.gridLines }
           },
           rightPriceScale: { visible: false },
           leftPriceScale: { visible: false },
           timeScale: {
-            borderColor: colors.gridLines,
+            borderColor: chartColors.gridLines,
             timeVisible: true,
             secondsVisible: false
           },
@@ -140,9 +147,9 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
             mode: 1,
             vertLine: {
               width: 1,
-              color: colors.crosshair,
+              color: chartColors.crosshair,
               style: 2,
-              labelBackgroundColor: colors.crosshairLabel
+              labelVisible: true
             },
             horzLine: { visible: false, labelVisible: false }
           },
@@ -162,7 +169,7 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
             crosshairMarkerVisible: true,
             crosshairMarkerRadius: 5,
             crosshairMarkerBorderWidth: 2,
-            crosshairMarkerBorderColor: isDark ? "#0a0a0a" : "#ffffff",
+            crosshairMarkerBorderColor: dark ? "#0f172a" : "#ffffff",
             crosshairMarkerBackgroundColor: s.color
           };
 
@@ -180,66 +187,74 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
           }
         }
 
-        // Crosshair handler
-        const onCrosshairMove = (param: any) => {
-          const { filteredSeries: currentSeries, height: h } = dataRef.current;
-          const containerH = containerRef.current?.clientHeight ?? h;
-
-          if (!param.time || !param.point || !param.seriesData) {
-            // Not hovering - show latest values at right edge
-            const items: TooltipState["items"] = [];
-            currentSeries.forEach((s) => {
-              if (s.data.length === 0) return;
-              const lastPt = s.data[s.data.length - 1];
-              const seriesObj = seriesMapRef.current.get(s.id);
-              if (!seriesObj) return;
-              const y = seriesObj.priceToCoordinate?.(lastPt.value);
-              if (y != null && !isNaN(y)) {
-                items.push({ id: s.id, y, label: s.label, color: s.color, value: lastPt.value });
+        // Helper to get tooltip items
+        const getTooltipItems = (time: any, seriesData: Map<any, any> | null): TooltipItem[] => {
+          const items: TooltipItem[] = [];
+          const containerH = containerRef.current?.clientHeight ?? height;
+          
+          dataRef.current.filteredSeries.forEach((s) => {
+            const seriesObj = seriesMapRef.current.get(s.id);
+            if (!seriesObj || s.data.length === 0) return;
+            
+            let value: number;
+            if (seriesData) {
+              const dataAtCursor = seriesData.get(seriesObj);
+              if (!dataAtCursor || typeof dataAtCursor.value !== "number") return;
+              value = dataAtCursor.value;
+            } else {
+              value = s.data[s.data.length - 1].value;
+            }
+            
+            const y = seriesObj.priceToCoordinate?.(value);
+            if (y != null && !isNaN(y)) {
+              items.push({ id: s.id, y, label: s.label, color: s.color, value });
+            }
+          });
+          
+          // Apply collision detection
+          if (items.length > 0) {
+            items.sort((a, b) => a.y - b.y);
+            for (let i = 1; i < items.length; i++) {
+              if (items[i].y < items[i - 1].y + TOOLTIP_HEIGHT) {
+                items[i].y = items[i - 1].y + TOOLTIP_HEIGHT;
               }
-            });
-            applyCollision(items, containerH);
-            setTooltipState({ cursorX: null, items });
+            }
+            const last = items[items.length - 1];
+            if (last && last.y > containerH - TOOLTIP_HEIGHT / 2) {
+              last.y = containerH - TOOLTIP_HEIGHT / 2;
+              for (let i = items.length - 2; i >= 0; i--) {
+                if (items[i + 1].y - items[i].y < TOOLTIP_HEIGHT) {
+                  items[i].y = items[i + 1].y - TOOLTIP_HEIGHT;
+                }
+              }
+            }
+          }
+          
+          return items;
+        };
+
+        // Crosshair handler
+        chart.subscribeCrosshairMove((param: any) => {
+          if (!param.time || !param.point || !param.seriesData) {
+            setIsHovering(false);
+            const items = getTooltipItems(null, null);
+            setTooltipItems(items);
             return;
           }
 
-          // Hovering - show values at cursor
-          const items: TooltipState["items"] = [];
-          currentSeries.forEach((s) => {
-            const seriesObj = seriesMapRef.current.get(s.id);
-            if (!seriesObj) return;
-            const dataAtCursor = param.seriesData.get(seriesObj);
-            if (!dataAtCursor || typeof dataAtCursor.value !== "number") return;
-            const y = seriesObj.priceToCoordinate?.(dataAtCursor.value);
-            if (y != null && !isNaN(y)) {
-              items.push({ id: s.id, y, label: s.label, color: s.color, value: dataAtCursor.value });
-            }
-          });
-          applyCollision(items, containerH);
-          setTooltipState({ cursorX: param.point.x, items });
-        };
+          setIsHovering(true);
+          setCursorX(param.point.x);
+          const items = getTooltipItems(param.time, param.seriesData);
+          setTooltipItems(items);
+        });
 
-        chart.subscribeCrosshairMove(onCrosshairMove);
         chart.timeScale().fitContent();
 
-        // Initial tooltips
-        setTimeout(() => {
-          const { filteredSeries: currentSeries, height: h } = dataRef.current;
-          const containerH = containerRef.current?.clientHeight ?? h;
-          const items: TooltipState["items"] = [];
-          currentSeries.forEach((s) => {
-            if (s.data.length === 0) return;
-            const lastPt = s.data[s.data.length - 1];
-            const seriesObj = seriesMapRef.current.get(s.id);
-            if (!seriesObj) return;
-            const y = seriesObj.priceToCoordinate?.(lastPt.value);
-            if (y != null && !isNaN(y)) {
-              items.push({ id: s.id, y, label: s.label, color: s.color, value: lastPt.value });
-            }
-          });
-          applyCollision(items, containerH);
-          setTooltipState({ cursorX: null, items });
-        }, 100);
+        // Initial tooltips (show latest values)
+        requestAnimationFrame(() => {
+          const items = getTooltipItems(null, null);
+          setTooltipItems(items);
+        });
 
         const onResize = () => {
           if (!containerRef.current || !chartRef.current) return;
@@ -263,7 +278,7 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
 
     init();
     return () => cleanup?.();
-  }, [mounted, height, filteredSeries, timeRange, colors, isDark]);
+  }, [mounted, height, seriesKey, isDark]);
 
   if (!mounted) {
     return <div className="w-full rounded-lg animate-pulse bg-muted" style={{ height }} />;
@@ -286,8 +301,6 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
     );
   }
 
-  const { cursorX, items } = tooltipState;
-
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-1 p-1 bg-muted rounded-lg w-fit">
@@ -309,19 +322,27 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
       <div className="relative rounded-lg overflow-hidden border border-border bg-card">
         <div ref={containerRef} style={{ height }} />
 
-        {items.map((item) => (
+        {tooltipItems.map((item) => (
           <div
             key={item.id}
-            className="absolute pointer-events-none -translate-y-1/2 z-10"
+            className="absolute pointer-events-none z-10 transition-all duration-75"
             style={{
-              left: cursorX !== null ? cursorX + 12 : undefined,
-              right: cursorX === null ? 8 : undefined,
-              top: item.y
+              left: isHovering ? cursorX + 12 : undefined,
+              right: isHovering ? undefined : 8,
+              top: item.y,
+              transform: "translateY(-50%)"
             }}
           >
-            <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-popover border border-border shadow-md text-xs whitespace-nowrap">
+            <div 
+              className="flex items-center gap-1.5 px-2 py-1 rounded-md text-xs whitespace-nowrap"
+              style={{ 
+                backgroundColor: isDark ? "rgba(15, 23, 42, 0.95)" : "rgba(255, 255, 255, 0.95)",
+                border: `1px solid ${isDark ? "#334155" : "#e2e8f0"}`,
+                boxShadow: "0 2px 8px rgba(0,0,0,0.15)"
+              }}
+            >
               <span className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }} />
-              <span className="text-muted-foreground">{item.label}</span>
+              <span style={{ color: isDark ? "#94a3b8" : "#64748b" }}>{item.label}</span>
               <span className="font-semibold tabular-nums" style={{ color: item.color }}>
                 {(item.value * 100).toFixed(1)}%
               </span>
@@ -340,25 +361,4 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
       </div>
     </div>
   );
-}
-
-function applyCollision(items: TooltipState["items"], containerH: number) {
-  if (items.length === 0) return;
-  items.sort((a, b) => a.y - b.y);
-
-  for (let i = 1; i < items.length; i++) {
-    if (items[i].y < items[i - 1].y + TOOLTIP_HEIGHT) {
-      items[i].y = items[i - 1].y + TOOLTIP_HEIGHT;
-    }
-  }
-
-  const last = items[items.length - 1];
-  if (last && last.y > containerH - TOOLTIP_HEIGHT / 2) {
-    last.y = containerH - TOOLTIP_HEIGHT / 2;
-    for (let i = items.length - 2; i >= 0; i--) {
-      if (items[i + 1].y - items[i].y < TOOLTIP_HEIGHT) {
-        items[i].y = items[i + 1].y - TOOLTIP_HEIGHT;
-      }
-    }
-  }
 }
