@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { getSupabaseAdmin } from "@/lib/supabase/server";
+import { getSupabaseAdmin, getSupabaseServer } from "@/lib/supabase/server";
 import { ExperimentDetailClient } from "@/components/experiments/experiment-detail-client";
 
 export const dynamic = "force-dynamic";
@@ -15,7 +15,7 @@ type Experiment = {
 };
 
 export default async function ExperimentPage({ params }: { params: { id: string } }) {
-  const supabase = getSupabaseAdmin();
+  const supabase = getSupabaseAdmin() || getSupabaseServer();
   if (!supabase) return notFound();
 
   const { data: exp, error } = await supabase
@@ -40,19 +40,33 @@ export default async function ExperimentPage({ params }: { params: { id: string 
     .order("timestamp", { ascending: true });
 
   const lastRun = runs?.[0] || null;
+  const snapshotCount = snapshots?.length || 0;
+  const lastTimestamp = snapshots?.[snapshots.length - 1]?.timestamp || null;
 
   return (
     <div className="space-y-6">
-      <div className="space-y-2">
+      <div className="space-y-3 rounded-2xl border border-border bg-card/70 p-4 shadow-sm">
         <p className="text-xs uppercase tracking-[0.2em] text-primary font-semibold">Experiment</p>
         <h1 className="text-2xl font-semibold text-foreground">{exp.question}</h1>
         {exp.normalized_question && (
           <p className="text-sm text-muted-foreground">{exp.normalized_question}</p>
         )}
-        <p className="text-sm text-muted-foreground">
-          Resolved outcome (inferred): {exp.resolution_outcome || "—"} • Resolved at:{" "}
-          {exp.resolved_at ? new Date(exp.resolved_at).toLocaleString() : "—"}
-        </p>
+        <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+          <span className="px-2 py-1 rounded-full border border-border bg-card/60">
+            Resolved outcome: {exp.resolution_outcome || "—"}
+          </span>
+          <span className="px-2 py-1 rounded-full border border-border bg-card/60">
+            Resolved at: {exp.resolved_at ? new Date(exp.resolved_at).toLocaleString() : "—"}
+          </span>
+          <span className="px-2 py-1 rounded-full border border-border bg-card/60">
+            Snapshots: {snapshotCount}
+          </span>
+          {lastTimestamp && (
+            <span className="px-2 py-1 rounded-full border border-border bg-card/60">
+              Last point: {new Date(lastTimestamp).toLocaleString()}
+            </span>
+          )}
+        </div>
         {lastRun && (
           <div className="space-y-1 text-xs text-muted-foreground">
             <p>
