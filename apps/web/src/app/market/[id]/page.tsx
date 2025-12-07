@@ -76,9 +76,7 @@ export default async function MarketPage({ params }: Props) {
     credibility_label: p.scored.display_labels?.credibility_label,
     summary: p.scored.display_labels?.summary,
     reason: p.scored.display_labels?.reason,
-    relevance_score: p.scored.scores 
-      ? Math.max(...Object.values(p.scored.scores as unknown as Record<string, { relevance: number }>).map(s => s?.relevance ?? 0)) 
-      : 0
+    relevance_score: (p.scored.scores as { relevance?: number } | null)?.relevance ?? 0
   }));
 
   // Find winning outcome label if resolved
