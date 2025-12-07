@@ -2,51 +2,113 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --background: 222 33% 6%;
-  --foreground: 213 30% 92%;
-  --card: 220 25% 12%;
-  --card-foreground: 213 30% 92%;
-  --popover: 220 20% 10%;
-  --popover-foreground: 213 30% 92%;
-  --primary: 212 80% 52%;
-  --primary-foreground: 210 40% 98%;
-  --secondary: 171 61% 45%;
-  --secondary-foreground: 210 40% 98%;
-  --muted: 220 16% 22%;
-  --muted-foreground: 215 16% 72%;
-  --accent: 268 75% 65%;
-  --accent-foreground: 222 47% 11%;
-  --destructive: 0 72% 51%;
-  --destructive-foreground: 210 40% 98%;
-  --border: 220 40% 30%;
-  --input: 220 40% 30%;
-  --ring: 212 80% 52%;
+@layer base {
+  :root {
+    /* Light Mode */
+    --background: 0 0% 100%; /* #ffffff */
+    --foreground: 222 47% 11%; /* #0f172a */
+    
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    
+    --primary: 221 83% 53%; /* #2563eb */
+    --primary-foreground: 210 40% 98%;
+    
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222 47% 11.2%;
+    
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222 47% 11.2%;
+    
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 221 83% 53%;
+    
+    --radius: 0.75rem;
+    
+    /* Custom Semantic Colors */
+    --success: 142 76% 36%;
+    --success-foreground: 355 100% 97%;
+    
+    --warning: 38 92% 50%;
+    --warning-foreground: 48 96% 89%;
+    
+    --info: 221 83% 53%;
+    --info-foreground: 210 40% 98%;
+  }
+
+  .dark {
+    /* Dark Mode (High Contrast / Semiotic Style) */
+    --background: 222 47% 11%; /* #0f172a (Slate 900) or #0a0a0a */
+    --foreground: 210 40% 98%;
+    
+    --card: 222 47% 11%;
+    --card-foreground: 210 40% 98%;
+    
+    --popover: 222 47% 11%;
+    --popover-foreground: 210 40% 98%;
+    
+    --primary: 217 91% 60%; /* #3b82f6 */
+    --primary-foreground: 222 47.4% 11.2%;
+    
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 224.3 76.3% 48%;
+  }
 }
 
-* {
-  @apply border-border;
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased selection:bg-primary/20 selection:text-primary;
+  }
 }
 
-body {
-  min-height: 100vh;
-  background: radial-gradient(circle at 20% 20%, rgba(39, 94, 254, 0.22), transparent 32%),
-    radial-gradient(circle at 80% 0%, rgba(16, 185, 129, 0.18), transparent 26%),
-    radial-gradient(circle at 40% 80%, rgba(180, 83, 255, 0.18), transparent 30%),
-    linear-gradient(135deg, #060912 0%, #0d1424 45%, #0a182e 100%);
-  color: hsl(var(--foreground));
-  -webkit-font-smoothing: antialiased;
-}
+/* Custom Utilities for Glassmorphism & Patterns */
+@layer utilities {
+  .glass-card {
+    @apply bg-background/60 backdrop-blur-xl border border-border/50 shadow-sm;
+  }
+  
+  .glass-panel {
+    @apply bg-card/40 backdrop-blur-lg border border-border/40;
+  }
 
-.glass {
-  @apply border border-white/15 bg-white/5 backdrop-blur-xl shadow-[0_20px_70px_rgba(0,0,0,0.35)];
+  /* Dot Grid Pattern */
+  .bg-dot-pattern {
+    background-image: radial-gradient(circle, hsl(var(--muted-foreground)) 1px, transparent 1px);
+    background-size: 24px 24px;
+    mask-image: linear-gradient(to bottom, black 40%, transparent 100%);
+  }
+  
+  /* Text Balance/Pretty */
+  .text-balance {
+    text-wrap: balance;
+  }
+  .text-pretty {
+    text-wrap: pretty;
+  }
 }
-
-.glass-strong {
-  @apply border border-white/20 bg-white/10 backdrop-blur-2xl shadow-[0_25px_80px_rgba(0,0,0,0.4)];
-}
-
-a {
-  @apply text-primary hover:underline;
-}
-
