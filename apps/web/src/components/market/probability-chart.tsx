@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
+import { useTheme } from "next-themes";
 
 type Series = {
   id: string;
@@ -32,6 +33,24 @@ const TIME_RANGES: { value: TimeRange; label: string; seconds: number | null }[]
 ];
 
 const TOOLTIP_HEIGHT = 26;
+
+// Theme-aware colors
+const CHART_COLORS = {
+  light: {
+    background: "transparent",
+    text: "#64748b",
+    gridLines: "#e2e8f0",
+    crosshair: "#94a3b8",
+    crosshairLabel: "#3b82f6"
+  },
+  dark: {
+    background: "transparent",
+    text: "#94a3b8",
+    gridLines: "#1e293b",
+    crosshair: "#475569",
+    crosshairLabel: "#3b82f6"
+  }
+};
 
 function applyCollisionDetection(tips: TooltipItem[], containerHeight: number) {
   if (tips.length === 0) return;
@@ -72,16 +91,18 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
   const [timeRange, setTimeRange] = useState<TimeRange>("all");
+  const { resolvedTheme } = useTheme();
   
-  // Tooltip state: cursorX is null when not hovering (show at right edge)
   const [cursorX, setCursorX] = useState<number | null>(null);
   const [tooltips, setTooltips] = useState<TooltipItem[]>([]);
+
+  const isDark = resolvedTheme === "dark";
+  const colors = isDark ? CHART_COLORS.dark : CHART_COLORS.light;
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  // Filter series data by time range
   const filteredSeries = series.map((s) => {
     const rangeConfig = TIME_RANGES.find((r) => r.value === timeRange);
     if (!rangeConfig?.seconds) return s;
@@ -90,7 +111,6 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
     return { ...s, data: s.data.filter((d) => d.time >= cutoff) };
   });
 
-  // Compute tooltips from latest data (for right-edge display)
   const computeStaticTooltips = useCallback(() => {
     if (!chartRef.current) return;
     
@@ -119,7 +139,6 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
       };
 
       if (!p.time || !p.point || !p.seriesData || !chartRef.current) {
-        // Mouse left the chart
         setCursorX(null);
         computeStaticTooltips();
         return;
@@ -183,18 +202,21 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
           width: containerRef.current.clientWidth,
           height,
           layout: {
-            background: { type: ColorType.Solid, color: "transparent" },
-            textColor: "hsl(var(--muted-foreground))"
+            background: { type: ColorType.Solid, color: colors.background },
+            textColor: colors.text
           },
           grid: {
-            vertLines: { color: "hsl(var(--border))" },
-            horzLines: { color: "hsl(var(--border))" }
+            vertLines: { color: colors.gridLines },
+            horzLines: { color: colors.gridLines }
           },
           rightPriceScale: {
-            visible: false // Hide built-in price scale completely
+            visible: false
+          },
+          leftPriceScale: {
+            visible: false
           },
           timeScale: {
-            borderVisible: false,
+            borderColor: colors.gridLines,
             timeVisible: true,
             secondsVisible: false
           },
@@ -202,9 +224,9 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
             mode: 1,
             vertLine: {
               width: 1,
-              color: "hsl(var(--muted-foreground) / 0.3)",
+              color: colors.crosshair,
               style: 2,
-              labelBackgroundColor: "hsl(var(--primary))"
+              labelBackgroundColor: colors.crosshairLabel
             },
             horzLine: {
               visible: false,
@@ -226,8 +248,9 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
             lastValueVisible: false,
             priceLineVisible: false,
             crosshairMarkerVisible: true,
-            crosshairMarkerRadius: 4,
-            crosshairMarkerBorderColor: s.color,
+            crosshairMarkerRadius: 5,
+            crosshairMarkerBorderWidth: 2,
+            crosshairMarkerBorderColor: isDark ? "#0a0a0a" : "#ffffff",
             crosshairMarkerBackgroundColor: s.color
           };
 
@@ -257,7 +280,6 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
           ((chartAny.timeScale as Function)() as any).fitContent();
         }
 
-        // Compute initial static tooltips
         setTimeout(() => computeStaticTooltips(), 50);
 
         const handleResize = () => {
@@ -284,15 +306,15 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
 
     initChart();
     return () => { if (cleanupFn) cleanupFn(); };
-  }, [mounted, height, filteredSeries, timeRange, handleCrosshairMove, computeStaticTooltips, cursorX]);
+  }, [mounted, height, filteredSeries, timeRange, handleCrosshairMove, computeStaticTooltips, cursorX, colors, isDark]);
 
   if (!mounted) {
-    return <div className="w-full bg-muted/50 rounded-lg animate-pulse" style={{ height }} />;
+    return <div className="w-full rounded-lg animate-pulse bg-muted" style={{ height }} />;
   }
 
   if (error) {
     return (
-      <div className="w-full bg-muted/50 rounded-lg flex items-center justify-center text-sm text-muted-foreground" style={{ height }}>
+      <div className="w-full rounded-lg flex items-center justify-center text-sm text-muted-foreground bg-muted" style={{ height }}>
         Chart error: {error}
       </div>
     );
@@ -301,7 +323,7 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
   const hasData = series.some((s) => s.data && s.data.length > 0);
   if (!hasData) {
     return (
-      <div className="w-full bg-muted/50 rounded-lg flex items-center justify-center text-sm text-muted-foreground" style={{ height }}>
+      <div className="w-full rounded-lg flex items-center justify-center text-sm text-muted-foreground bg-muted" style={{ height }}>
         No probability history yet
       </div>
     );
@@ -327,8 +349,8 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
       </div>
 
       {/* Chart */}
-      <div className="relative border border-border rounded-lg overflow-hidden">
-        <div ref={containerRef} className="w-full bg-card" style={{ height }} />
+      <div className="relative rounded-lg overflow-hidden border border-border bg-card">
+        <div ref={containerRef} style={{ height }} />
 
         {/* Custom Tooltips */}
         {tooltips.map((tip) => (
@@ -341,7 +363,7 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
               top: tip.y
             }}
           >
-            <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-card border border-border shadow-sm text-xs">
+            <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-popover border border-border shadow-md text-xs">
               <span
                 className="w-2 h-2 rounded-full"
                 style={{ backgroundColor: tip.color }}
@@ -351,6 +373,16 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
                 {(tip.value * 100).toFixed(1)}%
               </span>
             </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Legend */}
+      <div className="flex flex-wrap gap-4 text-xs">
+        {series.map((s) => (
+          <div key={s.id} className="flex items-center gap-1.5">
+            <span className="w-3 h-0.5 rounded-full" style={{ backgroundColor: s.color }} />
+            <span className="text-muted-foreground">{s.label}</span>
           </div>
         ))}
       </div>
