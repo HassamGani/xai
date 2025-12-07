@@ -214,8 +214,8 @@ Tweet by @${author?.username || post.author_id}:
       const followers = users.get(row.post.author_id)?.public_metrics?.followers_count || 0;
       const weight = Math.log10(Math.max(followers, 10)) / 5; // mild weight
       for (const label of labels) {
-        const s = row.scores[label];
-        if (!s) continue;
+        const s = row.scores[label] as any;
+        if (!s || typeof s !== "object") continue;
         const delta =
           (s.relevance ?? 0) *
           (Math.abs(s.stance ?? 0)) *
