@@ -49,7 +49,13 @@ export function DeleteMarketButton({ marketId }: Props) {
 
   return (
     <div className="space-y-2">
-      <Button variant="destructive" size="sm" onClick={handleDelete} disabled={loading}>
+      <Button
+        variant="secondary"
+        size="sm"
+        onClick={handleDelete}
+        disabled={loading}
+        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+      >
         {loading ? "Deleting..." : "Delete market (developer only)"}
       </Button>
       {error && <p className="text-sm text-destructive">{error}</p>}
