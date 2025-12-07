@@ -21,6 +21,7 @@ type RawRow = {
   x_post_id: string | null;
   text: string | null;
   author_id: string | null;
+  author_username?: string | null;
   author_followers: number | null;
   is_retweet: boolean | null;
   is_quote_retweet: boolean | null;
@@ -88,6 +89,7 @@ export async function GET(
         x_post_id: raw.x_post_id,
         text: raw.text,
         author_id: raw.author_id,
+        author_username: raw.author_username,
         author_followers: raw.author_followers,
         scored_at: s.scored_at,
         stance_label: s.display_labels?.stance_label,

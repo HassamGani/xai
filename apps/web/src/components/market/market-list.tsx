@@ -12,6 +12,7 @@ type Market = {
   normalized_question: string | null;
   created_at: string;
   total_posts_processed: number | null;
+  posts_count?: number | null;
 };
 
 type Props = {
@@ -142,7 +143,7 @@ export function MarketList({ markets }: Props) {
                   {m.question}
                 </CardTitle>
                 <CardDescription>
-                  {new Date(m.created_at).toLocaleDateString()} · {m.total_posts_processed ?? 0} posts
+                  {new Date(m.created_at).toLocaleDateString()} · {(m.posts_count ?? m.total_posts_processed ?? 0)} posts
                 </CardDescription>
               </CardHeader>
               {m.normalized_question && (

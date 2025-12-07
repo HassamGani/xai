@@ -210,7 +210,8 @@ async function processTweet(
       quote_count: number;
     };
   },
-  matchingRules: { tag: string }[]
+  matchingRules: { tag: string }[],
+  expansions?: { users?: Array<{ id: string; username?: string }> }
 ): Promise<void> {
   // Extract market IDs from matching rules
   const marketIds = new Set<string>();
@@ -262,6 +263,10 @@ async function processTweet(
       continue;
     }
 
+    // Map author username from expansions (if available)
+    const authorUsername =
+      expansions?.users?.find((u) => u.id === tweet.author_id)?.username ?? null;
+
     // Insert raw post
     const { data: rawPost, error: rawError } = await supabase
       .from("raw_posts")
@@ -270,6 +275,7 @@ async function processTweet(
         x_post_id: tweet.id,
         text: tweet.text,
         author_id: tweet.author_id,
+        author_username: authorUsername,
         post_created_at: tweet.created_at,
         metrics: tweet.public_metrics || {},
         is_retweet: isRetweet,
@@ -419,7 +425,7 @@ async function connectToStream(): Promise<void> {
     "author_id,created_at,public_metrics,referenced_tweets"
   );
   url.searchParams.set("expansions", "author_id,referenced_tweets.id");
-  url.searchParams.set("user.fields", "verified,public_metrics");
+  url.searchParams.set("user.fields", "verified,public_metrics,username,name");
 
   log("INFO", "🔌 Connecting to X filtered stream...");
 
@@ -484,6 +490,9 @@ async function connectToStream(): Promise<void> {
             if (data.data) {
               const tweet = data.data;
               const matchingRules = data.matching_rules || [];
+              const expansions = {
+                users: data.includes?.users || []
+              };
 
               log("INFO", "🐦 Received tweet", {
                 id: tweet.id,
@@ -492,7 +501,7 @@ async function connectToStream(): Promise<void> {
                 rules: matchingRules.map((r: { tag: string }) => r.tag),
               });
 
-              await processTweet(tweet, matchingRules);
+              await processTweet(tweet, matchingRules, expansions);
             }
           } catch (parseError) {
             if (line.trim() !== "") {

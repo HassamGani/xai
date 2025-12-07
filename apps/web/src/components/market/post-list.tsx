@@ -9,6 +9,7 @@ type Post = {
   x_post_id?: string | null;
   text?: string | null;
   author_id?: string | null;
+  author_username?: string | null;
   author_followers?: number | null;
   scored_at: string;
   stance_label?: string;
@@ -148,9 +149,9 @@ export function PostList({ marketId, posts, emptyMessage = "No curated posts yet
 
     fetch(`/api/avatars/generate?ids=${authorIds.join(",")}`)
       .then((res) => res.json())
-      .then((data) => {
-        if (data.avatars) {
-          setAvatars(data.avatars);
+      .then((resp) => {
+        if (resp.avatars) {
+          setAvatars(resp.avatars);
         }
       })
       .catch(console.error);
@@ -279,6 +280,7 @@ export function PostList({ marketId, posts, emptyMessage = "No curated posts yet
       <div className="space-y-3">
         {sortedPosts.map((p) => {
           const authorId = p.author_id || "unknown";
+          const handle = p.author_username || `user-${authorId}`;
           const hasAvatar = !!avatars[authorId];
           const isLoading = loadingAvatars.has(authorId);
           
@@ -342,7 +344,7 @@ export function PostList({ marketId, posts, emptyMessage = "No curated posts yet
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-1.5 min-w-0">
                       <span className="font-semibold text-foreground truncate">
-                        @{authorId}
+                        @{handle}
                       </span>
                       {p.author_followers != null && p.author_followers >= 10000 && (
                         <svg className="w-4 h-4 text-primary shrink-0" viewBox="0 0 24 24" fill="currentColor">
@@ -403,9 +405,13 @@ export function PostList({ marketId, posts, emptyMessage = "No curated posts yet
                     </div>
 
                     {/* View on X button */}
-                    {p.x_post_id && p.author_id && (
+                    {p.x_post_id && (
                       <a
-                        href={`https://x.com/${p.author_id}/status/${p.x_post_id}`}
+                        href={
+                          p.author_username
+                            ? `https://x.com/${p.author_username}/status/${p.x_post_id}`
+                            : `https://x.com/i/user/${p.author_id}/status/${p.x_post_id}`
+                        }
                         target="_blank"
                         rel="noopener noreferrer"
                         className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
