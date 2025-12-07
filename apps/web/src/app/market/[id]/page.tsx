@@ -165,13 +165,16 @@ export default async function MarketPage({ params }: Props) {
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {related.map((m) => (
               <Link key={m.id} href={`/market/${m.id}`} className="group">
-                <Button variant="ghost" className="w-full justify-start h-auto py-3 px-4 border border-border text-left hover:bg-accent/60">
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start h-auto py-3 px-4 border border-border text-left hover:bg-accent/60 whitespace-normal break-words"
+                >
                   <div className="flex flex-col items-start gap-1">
-                    <span className="text-sm font-medium group-hover:text-primary transition-colors line-clamp-2">
+                    <span className="text-sm font-medium group-hover:text-primary transition-colors line-clamp-2 break-words">
                       {m.question}
                     </span>
                     {m.normalized_question && (
-                      <span className="text-xs text-muted-foreground line-clamp-1">
+                      <span className="text-xs text-muted-foreground line-clamp-1 break-words">
                         {m.normalized_question}
                       </span>
                     )}
@@ -229,20 +232,41 @@ export default async function MarketPage({ params }: Props) {
 
 function computeRelated(current: MarketRow | null, markets: MarketRow[], limit: number): MarketRow[] {
   if (!current) return [];
-  const baseText = `${current.question} ${current.normalized_question ?? ""}`.toLowerCase();
-  const baseWords = new Set(baseText.split(/\W+/).filter((w) => w.length > 3));
-  const scored: { m: MarketRow; score: number }[] = [];
+  const stop = new Set([
+    "the","a","an","of","and","or","to","in","on","for","with","at","by","from","who","will","what","when","where","why","how","is","are","be","was","were","this","that","these","those","about","question"
+  ]);
+  const normalize = (q: string) =>
+    q
+      .toLowerCase()
+      .split(/\W+/)
+      .filter((w) => w.length > 2 && !stop.has(w));
+
+  const baseTokens = new Set([
+    ...normalize(current.question),
+    ...(current.normalized_question ? normalize(current.normalized_question) : [])
+  ]);
+  if (baseTokens.size === 0) return [];
+
+  const scored: { m: MarketRow; score: number; overlap: number }[] = [];
 
   for (const m of markets) {
     if (m.id === current.id) continue;
-    const text = `${m.question} ${m.normalized_question ?? ""}`.toLowerCase();
-    const words = new Set(text.split(/\W+/).filter((w) => w.length > 3));
-    if (words.size === 0 || baseWords.size === 0) continue;
-    const overlap = [...words].filter((w) => baseWords.has(w)).length;
-    const union = new Set([...words, ...baseWords]).size;
-    const score = overlap / union;
-    if (score > 0) scored.push({ m, score });
+    const tokens = new Set([
+      ...normalize(m.question),
+      ...(m.normalized_question ? normalize(m.normalized_question) : [])
+    ]);
+    if (tokens.size === 0) continue;
+    const overlap = [...tokens].filter((t) => baseTokens.has(t));
+    if (overlap.length < 2) continue; // require meaningful overlap
+    const union = new Set([...tokens, ...baseTokens]).size;
+    const jaccard = overlap.length / union;
+    if (jaccard >= 0.15) {
+      scored.push({ m, score: jaccard, overlap: overlap.length });
+    }
   }
 
-  return scored.sort((a, b) => b.score - a.score).slice(0, limit).map((s) => s.m);
+  return scored
+    .sort((a, b) => b.score - a.score || b.overlap - a.overlap)
+    .slice(0, limit)
+    .map((s) => s.m);
 }
