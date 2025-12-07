@@ -20,7 +20,7 @@ export async function GET(
     .from("experiment_posts")
     .select("*")
     .eq("experiment_id", id)
-    .order("post_created_at", { ascending: false })
+    .order("post_created_at", { ascending: true })
     .range(offset, offset + limit - 1);
 
   if (error) return NextResponse.json({ posts: [], error: "Failed to fetch posts" }, { status: 500 });
