@@ -39,6 +39,16 @@ const CHART_COLORS = {
   }
 };
 
+// Format time in the viewer's local time zone
+const formatLocalTime = (tsSeconds: number) => {
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit"
+  }).format(new Date(tsSeconds * 1000));
+};
+
 type TooltipItem = {
   id: string;
   y: number;
@@ -142,6 +152,12 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
             borderColor: chartColors.gridLines,
             timeVisible: true,
             secondsVisible: false
+          },
+          localization: {
+            timeFormatter: (ts) => {
+              const num = typeof ts === "number" ? ts : (ts as any);
+              return formatLocalTime(Number(num));
+            }
           },
           crosshair: {
             mode: 1,
