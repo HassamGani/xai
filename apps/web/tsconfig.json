@@ -1,7 +1,7 @@
 {
   "extends": "../../tsconfig.json",
   "compilerOptions": {
-    "types": ["node", "jest", "@types/react/experimental"],
+    "types": ["node", "@types/react/experimental"],
     "baseUrl": ".",
     "paths": {
       "@shared/*": ["../../packages/shared/src/*"],
