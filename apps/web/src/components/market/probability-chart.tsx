@@ -95,10 +95,48 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
       }
     }
 
-    // Sort by value desc to handle overlapping (higher value = higher on screen generally)
-    tips.sort((a, b) => b.value - a.value);
+    // Sort by Y coordinate (screen position top-to-bottom)
+    tips.sort((a, b) => a.y - b.y);
+
+    // Prevent Overlap Logic
+    const TOOLTIP_HEIGHT = 28; // Approximate height of tooltip
+    const CHART_HEIGHT = (containerRef.current?.clientHeight ?? height);
+
+    // Forward pass: push down
+    for (let i = 1; i < tips.length; i++) {
+      const prev = tips[i - 1];
+      const curr = tips[i];
+      if (curr.y < prev.y + TOOLTIP_HEIGHT) {
+        curr.y = prev.y + TOOLTIP_HEIGHT;
+      }
+    }
+
+    // Check bottom bound and ripple up
+    const last = tips[tips.length - 1];
+    if (last && last.y > CHART_HEIGHT - TOOLTIP_HEIGHT/2) {
+      const diff = last.y - (CHART_HEIGHT - TOOLTIP_HEIGHT/2);
+      last.y -= diff;
+      for (let i = tips.length - 2; i >= 0; i--) {
+        if (tips[i + 1].y - tips[i].y < TOOLTIP_HEIGHT) {
+          tips[i].y = tips[i + 1].y - TOOLTIP_HEIGHT;
+        }
+      }
+    }
+
+    // Check top bound and ripple down (rare but possible)
+    const first = tips[0];
+    if (first && first.y < TOOLTIP_HEIGHT/2) {
+      const diff = (TOOLTIP_HEIGHT/2) - first.y;
+      first.y += diff;
+      for (let i = 1; i < tips.length; i++) {
+        if (tips[i].y - tips[i - 1].y < TOOLTIP_HEIGHT) {
+          tips[i].y = tips[i - 1].y + TOOLTIP_HEIGHT;
+        }
+      }
+    }
+
     setTooltips(tips);
-  }, [series]);
+  }, [series, height]);
 
   useEffect(() => {
     if (!mounted || !containerRef.current) return;
