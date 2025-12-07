@@ -17,7 +17,8 @@ type Props = {
 type TimeRange = "1d" | "1w" | "1m" | "all";
 
 type TooltipData = {
-  x: number;
+  id: string;
+  x: number | null; // null means "align right"
   y: number;
   label: string;
   color: string;
@@ -38,7 +39,9 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
   const [timeRange, setTimeRange] = useState<TimeRange>("all");
-  const [tooltips, setTooltips] = useState<TooltipData>([]);
+  
+  // Single source of truth for tooltips to avoid duplication
+  const [activeTooltips, setActiveTooltips] = useState<TooltipData>([]);
   const [isHovering, setIsHovering] = useState(false);
 
   useEffect(() => {
@@ -48,7 +51,7 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
   // Filter series data by time range
   const filteredSeries = series.map((s) => {
     const rangeConfig = TIME_RANGES.find((r) => r.value === timeRange);
-    if (!rangeConfig?.seconds) return s; // "all" - no filtering
+    if (!rangeConfig?.seconds) return s;
 
     const now = Math.floor(Date.now() / 1000);
     const cutoff = now - rangeConfig.seconds;
@@ -59,53 +62,45 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
     };
   });
 
-  const handleCrosshairMove = useCallback((param: unknown) => {
-    const p = param as { 
-      time?: number; 
-      point?: { x: number; y: number };
-      seriesData?: Map<unknown, { value?: number }>;
-    };
+  // Helper to calculate static labels (right-aligned)
+  const updateStaticLabels = useCallback(() => {
+    if (!chartRef.current || isHovering) return;
     
-    if (!p.time || !p.point || !p.seriesData || !chartRef.current) {
-      setIsHovering(false);
-      setTooltips([]);
-      return;
-    }
-
-    setIsHovering(true);
-
     const tips: TooltipData = [];
-    
-    // Get values from each series
-    for (const s of series) {
+    const containerWidth = containerRef.current?.clientWidth ?? 0;
+
+    filteredSeries.forEach(s => {
+      if (s.data.length === 0) return;
+      
+      const lastPoint = s.data[s.data.length - 1];
       const seriesRef = seriesMapRef.current.get(s.id);
-      if (seriesRef) {
-        const data = p.seriesData.get(seriesRef);
-        if (data && typeof data.value === "number") {
-          // Calculate Y coordinate for this series value
-          const priceScale = (seriesRef as { priceToCoordinate: (price: number) => number | null }).priceToCoordinate(data.value);
-          
-          if (priceScale !== null) {
-            tips.push({
-              x: p.point.x,
-              y: priceScale,
-              label: s.label,
-              color: s.color,
-              value: data.value
-            });
-          }
+      
+      if (seriesRef && typeof (seriesRef as any).priceToCoordinate === 'function') {
+        const y = (seriesRef as any).priceToCoordinate(lastPoint.value);
+        if (y !== null) {
+          tips.push({
+            id: s.id,
+            x: null, // Signal to align right
+            y: y,
+            label: s.label,
+            color: s.color,
+            value: lastPoint.value
+          });
         }
       }
-    }
+    });
 
-    // Sort by Y coordinate (screen position top-to-bottom)
+    applyCollisionDetection(tips, (containerRef.current?.clientHeight ?? height));
+    setActiveTooltips(tips);
+  }, [filteredSeries, height, isHovering]);
+
+  const applyCollisionDetection = (tips: TooltipData, containerHeight: number) => {
+    // Sort by Y coordinate
     tips.sort((a, b) => a.y - b.y);
 
-    // Prevent Overlap Logic
-    const TOOLTIP_HEIGHT = 28; // Approximate height of tooltip
-    const CHART_HEIGHT = (containerRef.current?.clientHeight ?? height);
+    const TOOLTIP_HEIGHT = 28;
 
-    // Forward pass: push down
+    // Forward pass
     for (let i = 1; i < tips.length; i++) {
       const prev = tips[i - 1];
       const curr = tips[i];
@@ -114,10 +109,10 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
       }
     }
 
-    // Check bottom bound and ripple up
+    // Bottom check
     const last = tips[tips.length - 1];
-    if (last && last.y > CHART_HEIGHT - TOOLTIP_HEIGHT/2) {
-      const diff = last.y - (CHART_HEIGHT - TOOLTIP_HEIGHT/2);
+    if (last && last.y > containerHeight - TOOLTIP_HEIGHT/2) {
+      const diff = last.y - (containerHeight - TOOLTIP_HEIGHT/2);
       last.y -= diff;
       for (let i = tips.length - 2; i >= 0; i--) {
         if (tips[i + 1].y - tips[i].y < TOOLTIP_HEIGHT) {
@@ -126,7 +121,7 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
       }
     }
 
-    // Check top bound and ripple down (rare but possible)
+    // Top check
     const first = tips[0];
     if (first && first.y < TOOLTIP_HEIGHT/2) {
       const diff = (TOOLTIP_HEIGHT/2) - first.y;
@@ -137,14 +132,66 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
         }
       }
     }
+  };
 
-    setTooltips(tips);
-  }, [series, height]);
+  const handleCrosshairMove = useCallback((param: unknown) => {
+    const p = param as { 
+      time?: number; 
+      point?: { x: number; y: number };
+      seriesData?: Map<unknown, { value?: number }>;
+    };
+    
+    // Mouse leave or invalid data
+    if (!p.time || !p.point || !p.seriesData || !chartRef.current) {
+      if (isHovering) {
+        setIsHovering(false);
+        // We will trigger updateStaticLabels via useEffect when isHovering changes
+      }
+      return;
+    }
+
+    if (!isHovering) setIsHovering(true);
+
+    const tips: TooltipData = [];
+    
+    // Get values from each series
+    for (const s of filteredSeries) {
+      const seriesRef = seriesMapRef.current.get(s.id);
+      if (seriesRef) {
+        const data = p.seriesData.get(seriesRef);
+        if (data && typeof data.value === "number") {
+          const y = (seriesRef as any).priceToCoordinate(data.value);
+          if (y !== null) {
+            tips.push({
+              id: s.id,
+              x: p.point.x,
+              y: y,
+              label: s.label,
+              color: s.color,
+              value: data.value
+            });
+          }
+        }
+      }
+    }
+
+    applyCollisionDetection(tips, (containerRef.current?.clientHeight ?? height));
+    setActiveTooltips(tips);
+  }, [filteredSeries, height, isHovering]);
+
+  // Update static labels when not hovering or when data/layout changes
+  useEffect(() => {
+    if (!isHovering) {
+      // Small timeout to ensure chart has rendered new layout
+      const timer = requestAnimationFrame(() => updateStaticLabels());
+      return () => cancelAnimationFrame(timer);
+    }
+  }, [isHovering, updateStaticLabels]);
 
   useEffect(() => {
     if (!mounted || !containerRef.current) return;
 
-    // Check if we have any valid data
+    // Filter valid data
     const validSeries = filteredSeries
       .map((s) => ({
         ...s,
@@ -153,7 +200,7 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
           .sort((a, b) => a.time - b.time)
       }))
       .map((s) => {
-        // Dedupe by time
+        // Dedupe
         const seen = new Set<number>();
         const deduped: { time: number; value: number }[] = [];
         for (const d of s.data) {
@@ -166,9 +213,7 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
       })
       .filter((s) => s.data.length > 0);
 
-    if (validSeries.length === 0) {
-      return;
-    }
+    if (validSeries.length === 0) return;
 
     let chart: unknown;
     let cleanupFn: (() => void) | undefined;
@@ -201,7 +246,7 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
             secondsVisible: false
           },
           crosshair: {
-            mode: 1, // Magnet mode
+            mode: 1, // Magnet
             vertLine: {
               width: 1,
               color: "rgba(255,255,255,0.4)",
@@ -227,26 +272,21 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
               color: s.color,
               lineWidth: 2,
               title: s.label,
-              lastValueVisible: false, // We handle labels manually with tooltips
+              lastValueVisible: false, // Hide built-in axis labels
               priceLineVisible: false,
               crosshairMarkerVisible: true,
               crosshairMarkerRadius: 4,
               crosshairMarkerBorderColor: s.color,
-              crosshairMarkerBackgroundColor: s.color // Solid dot
+              crosshairMarkerBackgroundColor: s.color
             };
 
             let line: unknown;
 
-            // Try v4 style first (addLineSeries)
             if (typeof chartAny.addLineSeries === "function") {
               line = (chartAny.addLineSeries as Function)(seriesOpts);
-            }
-            // Try v5 style with LineSeries
-            else if (LineSeries && typeof chartAny.addSeries === "function") {
+            } else if (LineSeries && typeof chartAny.addSeries === "function") {
               line = (chartAny.addSeries as Function)(LineSeries, seriesOpts);
-            }
-            // Fallback
-            else if (typeof chartAny.addSeries === "function") {
+            } else if (typeof chartAny.addSeries === "function") {
               line = (chartAny.addSeries as Function)({ type: "Line" });
               if (line && typeof (line as Record<string, unknown>).applyOptions === "function") {
                 (line as { applyOptions: Function }).applyOptions(seriesOpts);
@@ -262,7 +302,6 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
           }
         }
 
-        // Subscribe to crosshair move
         if (chart && typeof (chart as Record<string, unknown>).subscribeCrosshairMove === "function") {
           (chart as { subscribeCrosshairMove: Function }).subscribeCrosshairMove(handleCrosshairMove);
         }
@@ -271,11 +310,24 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
           ((chart as { timeScale: Function }).timeScale() as { fitContent: Function }).fitContent();
         }
 
+        // Subscribe to time range changes to update static labels
+        if (chart && typeof (chart as Record<string, unknown>).timeScale === "function") {
+            const timeScale = (chart as any).timeScale();
+            if (timeScale && typeof timeScale.subscribeVisibleLogicalRangeChange === 'function') {
+                timeScale.subscribeVisibleLogicalRangeChange(() => {
+                    if (!isHovering) {
+                        requestAnimationFrame(() => updateStaticLabels());
+                    }
+                });
+            }
+        }
+
         const handleResize = () => {
           if (!containerRef.current || !chartRef.current) return;
           (chartRef.current as { applyOptions: Function }).applyOptions({
             width: containerRef.current.clientWidth
           });
+          if (!isHovering) updateStaticLabels();
         };
 
         window.addEventListener("resize", handleResize);
@@ -283,20 +335,18 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
         cleanupFn = () => {
           window.removeEventListener("resize", handleResize);
           if (chartRef.current) {
-            if (typeof (chartRef.current as Record<string, unknown>).unsubscribeCrosshairMove === "function") {
-              (chartRef.current as { unsubscribeCrosshairMove: Function }).unsubscribeCrosshairMove(handleCrosshairMove);
-            }
-            if (typeof (chartRef.current as Record<string, unknown>).remove === "function") {
-              try {
-                (chartRef.current as { remove: Function }).remove();
-              } catch (e) {
-                // ignore
-              }
+            // cleanup
+            if (typeof (chartRef.current as any).remove === "function") {
+              try { (chartRef.current as any).remove(); } catch (e) {}
             }
           }
           chartRef.current = null;
           seriesMapRef.current.clear();
         };
+        
+        // Initial label update
+        setTimeout(() => updateStaticLabels(), 100);
+
       } catch (err) {
         console.error("Chart init error:", err);
         setError(err instanceof Error ? err.message : String(err));
@@ -308,152 +358,76 @@ export function ProbabilityChart({ series, height = 320 }: Props) {
     return () => {
       if (cleanupFn) cleanupFn();
     };
-  }, [mounted, height, filteredSeries, timeRange, handleCrosshairMove]);
+  }, [mounted, height, filteredSeries, timeRange, handleCrosshairMove]); // Re-init on data change
 
   if (!mounted) {
     return <div className="w-full bg-white/5 rounded animate-pulse" style={{ height: height + 48 }} />;
   }
 
   if (error) {
-    return (
-      <div className="w-full bg-white/5 rounded flex items-center justify-center text-sm text-muted-foreground" style={{ height }}>
-        Chart error: {error}
-      </div>
-    );
+    return <div className="w-full bg-white/5 rounded flex items-center justify-center text-sm text-muted-foreground" style={{ height }}>Chart error: {error}</div>;
   }
 
   const hasData = series.some((s) => s.data && s.data.length > 0);
-  const hasFilteredData = filteredSeries.some((s) => s.data && s.data.length > 0);
-
   if (!hasData) {
-    return (
-      <div className="w-full bg-white/5 rounded flex items-center justify-center text-sm text-muted-foreground" style={{ height }}>
-        No probability history yet
-      </div>
-    );
-  }
-
-  // Calculate positions for right-aligned labels (when not hovering)
-  const rightLabels = !isHovering && chartRef.current 
-    ? filteredSeries
-        .filter(s => s.data.length > 0)
-        .map(s => {
-          const lastPoint = s.data[s.data.length - 1];
-          const seriesRef = seriesMapRef.current.get(s.id);
-          let y = 0;
-          
-          if (seriesRef && typeof (seriesRef as any).priceToCoordinate === 'function') {
-            y = (seriesRef as any).priceToCoordinate(lastPoint.value) ?? 0;
-          }
-
-          return {
-            id: s.id,
-            label: s.label,
-            color: s.color,
-            value: lastPoint.value,
-            y
-          };
-        })
-        .sort((a, b) => a.y - b.y) // Sort by Y position
-    : [];
-
-  // Apply collision detection to right labels too
-  if (rightLabels.length > 0) {
-    const TOOLTIP_HEIGHT = 28;
-    const CHART_HEIGHT = (containerRef.current?.clientHeight ?? height);
-
-    // Forward pass
-    for (let i = 1; i < rightLabels.length; i++) {
-      const prev = rightLabels[i - 1];
-      const curr = rightLabels[i];
-      if (curr.y < prev.y + TOOLTIP_HEIGHT) {
-        curr.y = prev.y + TOOLTIP_HEIGHT;
-      }
-    }
-
-    // Bottom check
-    const last = rightLabels[rightLabels.length - 1];
-    if (last && last.y > CHART_HEIGHT - TOOLTIP_HEIGHT/2) {
-      const diff = last.y - (CHART_HEIGHT - TOOLTIP_HEIGHT/2);
-      last.y -= diff;
-      for (let i = rightLabels.length - 2; i >= 0; i--) {
-        if (rightLabels[i + 1].y - rightLabels[i].y < TOOLTIP_HEIGHT) {
-          rightLabels[i].y = rightLabels[i + 1].y - TOOLTIP_HEIGHT;
-        }
-      }
-    }
+    return <div className="w-full bg-white/5 rounded flex items-center justify-center text-sm text-muted-foreground" style={{ height }}>No probability history yet</div>;
   }
 
   return (
     <div className="space-y-3">
-      {/* Time range selector */}
-      <div className="flex items-center gap-1 p-1 bg-white/5 rounded-lg w-fit">
-        {TIME_RANGES.map((range) => (
-          <button
-            key={range.value}
-            onClick={() => setTimeRange(range.value)}
-            className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
-              timeRange === range.value
-                ? "bg-blue-500/80 text-white shadow-sm"
-                : "text-muted-foreground hover:text-foreground hover:bg-white/10"
-            }`}
-          >
-            {range.label}
-          </button>
-        ))}
+      {/* Header with Legend (Static) */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-1 p-1 bg-white/5 rounded-lg">
+          {TIME_RANGES.map((range) => (
+            <button
+              key={range.value}
+              onClick={() => setTimeRange(range.value)}
+              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
+                timeRange === range.value
+                  ? "bg-blue-500/80 text-white shadow-sm"
+                  : "text-muted-foreground hover:text-foreground hover:bg-white/10"
+              }`}
+            >
+              {range.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Legend - Just Colors & Labels */}
+        <div className="flex items-center gap-4 text-sm">
+          {filteredSeries.map((s) => (
+            <div key={s.id} className="flex items-center gap-2">
+              <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: s.color }} />
+              <span className="text-muted-foreground">{s.label}</span>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Chart container */}
       <div className="relative group cursor-crosshair">
-        {hasFilteredData ? (
-          <div ref={containerRef} className="w-full rounded bg-white/5" style={{ height }} />
-        ) : (
-          <div className="w-full bg-white/5 rounded flex items-center justify-center text-sm text-muted-foreground" style={{ height }}>
-            No data for selected time range
-          </div>
-        )}
+        <div ref={containerRef} className="w-full rounded bg-white/5" style={{ height }} />
 
-        {/* Hover Tooltips (follow cursor) */}
-        {isHovering && tooltips.map((tip) => (
+        {/* Unified Tooltips Rendering */}
+        {activeTooltips.map((tip) => (
           <div
-            key={`hover-${tip.label}`}
-            className="absolute pointer-events-none flex items-center gap-2 transform -translate-y-1/2 z-10 transition-transform duration-75"
+            key={tip.id}
+            className="absolute pointer-events-none flex items-center gap-2 transform -translate-y-1/2 z-10 transition-all duration-150 ease-out"
             style={{
-              left: tip.x + 10,
+              // If x is null, align right. Else align to x.
+              left: tip.x !== null ? tip.x + 10 : undefined,
+              right: tip.x === null ? 10 : undefined,
               top: tip.y,
             }}
           >
             <div 
               className="px-2 py-1 rounded shadow-lg backdrop-blur-md border border-white/10 text-xs font-medium flex items-center gap-2"
-              style={{ backgroundColor: "rgba(0,0,0,0.7)" }}
+              style={{ backgroundColor: "rgba(0,0,0,0.85)" }}
             >
               <div className="w-2 h-2 rounded-full" style={{ backgroundColor: tip.color }} />
               <span className="text-white whitespace-nowrap">{tip.label}</span>
               <span className="font-bold tabular-nums" style={{ color: tip.color }}>
                 {(tip.value * 100).toFixed(1)}%
-              </span>
-            </div>
-          </div>
-        ))}
-
-        {/* Right-side Labels (when NOT hovering) */}
-        {!isHovering && rightLabels.map((lbl) => (
-          <div
-            key={`right-${lbl.id}`}
-            className="absolute pointer-events-none flex items-center gap-2 transform -translate-y-1/2 z-10 transition-all duration-200"
-            style={{
-              right: 10,
-              top: lbl.y,
-            }}
-          >
-            <div 
-              className="px-2 py-1 rounded shadow-lg backdrop-blur-md border border-white/10 text-xs font-medium flex items-center gap-2"
-              style={{ backgroundColor: "rgba(0,0,0,0.7)" }}
-            >
-              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: lbl.color }} />
-              <span className="text-white whitespace-nowrap">{lbl.label}</span>
-              <span className="font-bold tabular-nums" style={{ color: lbl.color }}>
-                {(lbl.value * 100).toFixed(1)}%
               </span>
             </div>
           </div>
