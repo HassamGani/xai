@@ -3,18 +3,10 @@ export const dynamic = "force-dynamic";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getMarket, getMarketPosts } from "@/lib/markets";
-import { OutcomeCards } from "@/components/market/outcome-cards";
-import { ProbabilityChart } from "@/components/market/probability-chart";
-import { PostList } from "@/components/market/post-list";
 import { ResolutionBanner } from "@/components/market/resolution-banner";
 import { MarketInfo } from "@/components/market/market-info";
-import { GrokAnalysis } from "@/components/market/grok-analysis";
+import { MarketTabs } from "@/components/market/market-tabs";
 import { Button } from "@/components/ui/button";
-import { DeleteMarketButton } from "@/components/market/delete-market-button";
-import { AddTickerForm } from "@/components/market/add-ticker-form";
-import { RemoveTickerButton } from "@/components/market/remove-ticker-button";
-import { LivePanel } from "@/components/market/live-panel";
-import { CorrelationInsights } from "@/components/market/correlation-insights";
 
 type Props = {
   params: { id: string };
@@ -35,22 +27,6 @@ function findProb(probs: Record<string, number> | null | undefined, outcomeId: s
   return 0;
 }
 
-function toSeries(
-  snapshots: { timestamp: string; probabilities: Record<string, number> }[],
-  outcomes: { id: string; outcome_id: string; label: string }[]
-) {
-  const palette = ["#2563eb", "#16a34a", "#a855f7", "#f97316", "#0ea5e9", "#e11d48", "#84cc16"];
-  return outcomes.map((o, idx) => ({
-    id: o.id,
-    label: o.label,
-    color: palette[idx % palette.length],
-    data: snapshots.map((s) => ({
-      time: Math.floor(new Date(s.timestamp).getTime() / 1000),
-      value: findProb(s.probabilities, o.outcome_id)
-    }))
-  }));
-}
-
 export default async function MarketPage({ params }: Props) {
   const marketId = params.id;
   const { market, outcomes, state, snapshots } = await getMarket(marketId).catch(() => ({
@@ -66,14 +42,6 @@ export default async function MarketPage({ params }: Props) {
 
   // Show dev controls by default for hackathon; can disable with NEXT_PUBLIC_SHOW_DEV_CONTROLS=false
   const showDevDelete = process.env.NEXT_PUBLIC_SHOW_DEV_CONTROLS !== "false";
-
-  const outcomeProbs = outcomes.map((o) => ({
-    id: o.id,
-    label: o.label,
-    probability: findProb(state?.probabilities, o.outcome_id) || o.current_probability || 0
-  }));
-
-  const chartSeries = toSeries(snapshots, outcomes);
 
   const displayPosts = posts.map((p) => ({
     id: p.scored.id,
@@ -149,60 +117,16 @@ export default async function MarketPage({ params }: Props) {
         isResolved={isResolved}
       />
 
-      <LivePanel
+      {/* Tabbed Content */}
+      <MarketTabs
         marketId={marketId}
         outcomes={outcomes}
         state={state}
         snapshots={snapshots}
         winningOutcomeId={winningOutcome?.id}
+        posts={displayPosts}
+        showDevControls={showDevDelete}
       />
-
-      {showDevDelete && (
-        <div className="border border-destructive/30 rounded-lg p-4 space-y-3">
-          <p className="text-sm font-medium text-destructive">Developer-only controls</p>
-          <DeleteMarketButton marketId={marketId} />
-          <div className="space-y-2">
-            <p className="text-sm font-medium">Add ticker</p>
-            <AddTickerForm
-              marketId={marketId}
-              existingLabels={outcomes.map((o) => o.label)}
-            />
-          </div>
-          <div className="space-y-2">
-            <p className="text-sm font-medium">Remove ticker</p>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {outcomes.map((o) => (
-                <RemoveTickerButton
-                  key={o.id}
-                  marketId={marketId}
-                  outcomeId={o.outcome_id}
-                  label={o.label}
-                />
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Grok Analysis */}
-      <div className="space-y-3">
-        <h2 className="text-lg font-semibold">AI Analysis</h2>
-        <GrokAnalysis marketId={marketId} />
-      </div>
-
-      {/* Cross-Market Correlation Insights */}
-      <div className="space-y-3">
-        <h2 className="text-lg font-semibold">Cross-Market Correlations</h2>
-        <p className="text-sm text-muted-foreground">
-          Discover markets with correlated probability movements and causality chains.
-        </p>
-        <CorrelationInsights marketId={marketId} />
-      </div>
-
-      <div className="space-y-3">
-        <h2 className="text-lg font-semibold">Curated posts</h2>
-        <PostList posts={displayPosts} marketId={marketId} />
-      </div>
     </div>
   );
 }
