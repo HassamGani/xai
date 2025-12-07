@@ -103,7 +103,8 @@ export function ExperimentsPanel({ experiments: initial }: Props) {
       const res = await fetch(`/api/experiments/${id}/delete`, { method: "POST" });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || data.details || "Failed to delete");
-      setExperiments((prev) => prev.filter((e) => e.id !== id));
+      // Refresh from server to ensure consistency
+      await refreshList();
     } catch (e: any) {
       setError(e.message || "Failed to delete");
     } finally {
