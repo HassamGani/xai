@@ -160,7 +160,6 @@ export default async function MarketPage({ params }: Props) {
             <AddTickerForm
               marketId={marketId}
               existingLabels={outcomes.map((o) => o.label)}
-              onChange={() => {}}
             />
           </div>
           <div className="space-y-2">
@@ -172,7 +171,6 @@ export default async function MarketPage({ params }: Props) {
                   marketId={marketId}
                   outcomeId={o.outcome_id}
                   label={o.label}
-                  onChange={() => {}}
                 />
               ))}
             </div>

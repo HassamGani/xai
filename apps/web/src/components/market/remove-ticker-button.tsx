@@ -8,10 +8,9 @@ type Props = {
   marketId: string;
   outcomeId: string;
   label: string;
-  onChange?: () => void;
 };
 
-export function RemoveTickerButton({ marketId, outcomeId, label, onChange }: Props) {
+export function RemoveTickerButton({ marketId, outcomeId, label }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
@@ -36,7 +35,6 @@ export function RemoveTickerButton({ marketId, outcomeId, label, onChange }: Pro
         return;
       }
       router.refresh();
-      onChange?.();
     } catch (e) {
       setError("Network error");
     } finally {
