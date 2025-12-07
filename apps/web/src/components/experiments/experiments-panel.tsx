@@ -49,6 +49,8 @@ export function ExperimentsPanel({ experiments: initial }: Props) {
       if (data.experiment) {
         setExperiments((prev) => [data.experiment, ...prev]);
         setQuestion("");
+        // auto-run the experiment once created (fire-and-forget)
+        fetch(`/api/experiments/${data.experiment.id}/run`, { method: "POST" }).catch(() => {});
       }
     } catch (e: any) {
       setError(e.message || "Failed to create experiment");
